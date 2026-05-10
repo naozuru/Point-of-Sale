@@ -1,0 +1,771 @@
+:root {
+  --primary-color: #e3000f; /* Aksen merah khas ritel */
+  --secondary-color: #00529c; /* Aksen biru */
+  --bg-color: #f4f6f8;
+  --text-color: #333;
+  --border-color: #ddd;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.header {
+  background-color: var(--secondary-color);
+  color: white;
+  padding: 15px 30px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.pos-container {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  padding: 20px;
+  gap: 20px;
+}
+
+/* Panel Produk */
+.products-section {
+  flex: 2;
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+#search-bar {
+  padding: 10px;
+  width: 250px;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  font-size: 14px;
+}
+
+.product-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 15px;
+  overflow-y: auto;
+  padding-right: 5px;
+}
+
+.product-card {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 15px;
+  text-align: center;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.1s;
+  background: #fff;
+}
+
+.product-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  border-color: var(--secondary-color);
+}
+
+.product-name {
+  font-weight: 600;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.product-price {
+  color: var(--primary-color);
+  font-weight: bold;
+}
+
+/* Panel Keranjang */
+.cart-section {
+  flex: 1;
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  min-width: 300px;
+}
+
+.cart-items-container {
+  flex: 1;
+  overflow-y: auto;
+  margin: 15px 0;
+  border-top: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.cart-items {
+  list-style: none;
+}
+
+.cart-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px dashed var(--border-color);
+}
+
+.item-details {
+  flex: 1;
+}
+
+.item-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn-qty {
+  background: var(--bg-color);
+  border: 1px solid var(--border-color);
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.btn-qty:hover {
+  background: #e2e6ea;
+}
+
+.cart-summary {
+  padding-top: 10px;
+}
+
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  font-size: 16px;
+}
+
+.total-row {
+  font-size: 20px;
+  font-weight: bold;
+  color: var(--primary-color);
+  margin-bottom: 20px;
+}
+
+.checkout-btn {
+  width: 100%;
+  padding: 15px;
+  background-color: var(--secondary-color);
+  color: white;
+  border: none;
+  border-radius: 5px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.checkout-btn:hover {
+  background-color: #004080;
+}
+
+.checkout-btn:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+/* Responsif untuk layar kecil */
+@media (max-width: 768px) {
+  .pos-container {
+    flex-direction: column;
+  }
+  .cart-section {
+    flex: none;
+    height: 350px;
+  }
+}
+
+/* ================= Modal Styles ================= */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+
+  /* Animasi Hidden/Show */
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.modal-overlay.active {
+  opacity: 1;
+  visibility: visible;
+}
+
+.modal-content {
+  background: white;
+  padding: 30px;
+  border-radius: 12px;
+  text-align: center;
+  width: 90%;
+  max-width: 400px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+
+  /* Animasi Slide Up */
+  transform: translateY(-30px);
+  transition: transform 0.3s ease;
+}
+
+.modal-overlay.active .modal-content {
+  transform: translateY(0);
+}
+
+.modal-icon {
+  font-size: 50px;
+  margin-bottom: 10px;
+}
+
+.modal-content h2 {
+  color: #333;
+  margin-bottom: 5px;
+}
+
+.modal-content p {
+  color: #666;
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+
+.receipt-summary {
+  background: var(--bg-color);
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  text-align: left;
+}
+
+.receipt-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 15px;
+}
+
+.receipt-row:last-child {
+  margin-bottom: 0;
+  font-size: 18px;
+  color: var(--primary-color);
+  border-top: 1px dashed var(--border-color);
+  padding-top: 8px;
+  margin-top: 8px;
+}
+
+.btn-close-modal {
+  width: 100%;
+  padding: 12px;
+  background-color: var(--secondary-color);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-close-modal:hover {
+  background-color: #004080;
+}
+
+/* ================= Header Controls ================= */
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.btn-history {
+  background-color: white;
+  color: var(--secondary-color);
+  border: none;
+  padding: 8px 15px;
+  border-radius: 5px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-history:hover {
+  background-color: #f0f0f0;
+}
+
+/* ================= History Modal ================= */
+.history-content {
+  max-width: 500px;
+  text-align: left;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 10px;
+}
+
+.modal-header h2 {
+  margin-bottom: 0;
+}
+
+.btn-close-icon {
+  background: none;
+  border: none;
+  font-size: 28px;
+  cursor: pointer;
+  color: #666;
+  line-height: 1;
+}
+
+.btn-close-icon:hover {
+  color: var(--primary-color);
+}
+
+.history-list {
+  max-height: 350px;
+  overflow-y: auto;
+  margin-bottom: 15px;
+  padding-right: 5px;
+}
+
+.history-card {
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 10px;
+  background: var(--bg-color);
+}
+
+.history-header-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 5px;
+}
+
+.history-date {
+  font-size: 12px;
+  color: #666;
+}
+
+.history-id {
+  font-size: 12px;
+  color: #999;
+}
+
+.history-total {
+  font-weight: bold;
+  color: var(--primary-color);
+  font-size: 16px;
+  margin-bottom: 5px;
+}
+
+.history-items {
+  font-size: 13px;
+  color: #444;
+  line-height: 1.4;
+}
+
+.btn-clear-history {
+  width: 100%;
+  padding: 10px;
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.btn-clear-history:hover {
+  background-color: #c82333;
+}
+
+/* ================= Input Pembeli & Tombol Hapus Satuan ================= */
+.buyer-info {
+  margin-bottom: 15px;
+  border-top: 1px solid var(--border-color);
+  padding-top: 15px;
+}
+
+#buyer-name {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  font-size: 14px;
+  outline: none;
+}
+
+#buyer-name:focus {
+  border-color: var(--secondary-color);
+}
+
+/* ================= Status Card & Tombol Riwayat ================= */
+/* Background hijau jika transaksi selesai */
+.history-card.completed {
+  background-color: #c8e6c9;
+  border-color: #81c784;
+}
+
+.history-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+/* Tombol Hapus - Disesuaikan agar bisa sejajar */
+.btn-delete-single {
+  flex: 1;
+  background-color: #ffebee;
+  color: #d32f2f;
+  border: 1px solid #ffcdd2;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-delete-single:hover {
+  background-color: #ffcdd2;
+}
+
+/* Tombol Selesaikan Transaksi */
+.btn-complete-single {
+  flex: 1;
+  background-color: #e0f2f1;
+  color: #00796b;
+  border: 1px solid #b2dfdb;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-complete-single:hover {
+  background-color: #b2dfdb;
+}
+
+/* Tombol Batal Selesai (Saat status sudah selesai) */
+.btn-cancel-complete {
+  flex: 1;
+  background-color: #fff3e0;
+  color: #ef6c00;
+  border: 1px solid #ffe0b2;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-cancel-complete:hover {
+  background-color: #ffe0b2;
+}
+
+/* ================= Kategori & Stok ================= */
+.category-filters {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 15px;
+  overflow-x: auto;
+  padding-bottom: 5px;
+}
+
+.btn-category {
+  padding: 6px 12px;
+  border: 1px solid var(--border-color);
+  background: white;
+  border-radius: 15px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.btn-category.active,
+.btn-category:hover {
+  background: var(--secondary-color);
+  color: white;
+  border-color: var(--secondary-color);
+}
+
+.product-stock {
+  font-size: 11px;
+  color: #666;
+  margin-top: 5px;
+}
+
+.product-card.out-of-stock {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #f8f9fa;
+}
+
+/* ================= Pembayaran & Kembalian ================= */
+.payment-section {
+  background: #f8f9fa;
+  padding: 10px;
+  border-radius: 6px;
+  margin-bottom: 15px;
+  border: 1px solid var(--border-color);
+}
+
+#cash-amount {
+  width: 100px;
+  text-align: right;
+  padding: 5px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+}
+
+.return-row {
+  font-weight: bold;
+  color: #28a745; /* Hijau kembalian */
+  margin-top: 10px;
+}
+
+/* Tombol Cetak Struk di Modal */
+.btn-print {
+  background-color: #6c757d;
+  color: white;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.btn-print:hover {
+  background-color: #5a6268;
+}
+
+/* ================= PRINT MEDIA (Khusus Printer Thermal) ================= */
+#print-area {
+  display: none; /* Sembunyikan di layar normal */
+}
+
+@media print {
+  /* Sembunyikan seluruh UI Web */
+  body > *:not(#print-area) {
+    display: none !important;
+  }
+
+  /* Tampilkan dan format area print */
+  #print-area {
+    display: block !important;
+    width: 58mm; /* Ukuran standar kertas thermal kecil */
+    margin: 0;
+    padding: 0;
+    font-family: "Courier New", Courier, monospace; /* Font struk */
+    font-size: 12px;
+    color: black;
+  }
+
+  .struk-header {
+    text-align: center;
+    margin-bottom: 10px;
+    border-bottom: 1px dashed black;
+    padding-bottom: 5px;
+  }
+  .struk-info {
+    font-size: 10px;
+    margin-bottom: 10px;
+  }
+  .struk-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+  }
+  .struk-item-name {
+    width: 100%;
+    margin-bottom: 2px;
+  }
+  .struk-item-calc {
+    font-size: 11px;
+    display: flex;
+    justify-content: space-between;
+  }
+  .struk-divider {
+    border-top: 1px dashed black;
+    margin: 5px 0;
+  }
+  .struk-total {
+    font-weight: bold;
+  }
+  .struk-footer {
+    text-align: center;
+    font-size: 10px;
+    margin-top: 10px;
+    border-top: 1px dashed black;
+    padding-top: 5px;
+  }
+}
+
+/* ================= Pembayaran di Riwayat ================= */
+.history-payment-area {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.history-payment-area input {
+  padding: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  width: 100%;
+}
+
+.history-change {
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.history-change.success {
+  color: #28a745;
+}
+.history-change.error {
+  color: #dc3545;
+}
+
+.history-payment-info {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border-color);
+  font-size: 13px;
+  color: #1b5e20;
+  font-weight: bold;
+}
+
+/* Mematikan tombol jika uang belum cukup */
+.btn-complete-single:disabled {
+  background-color: #e0e0e0;
+  color: #9e9e9e;
+  border-color: #bdbdbd;
+  cursor: not-allowed;
+}
+
+/* ================= Sinkronisasi & Mode Offline ================= */
+.btn-sync {
+    background-color: #ffc107; /* Kuning peringatan jika ada antrean */
+    color: #333;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 5px;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.3s;
+}
+
+.btn-sync.all-synced {
+    background-color: #28a745; /* Hijau jika semua aman/tersinkron */
+    color: white;
+}
+
+.btn-sync:disabled {
+    opacity: 0.7;
+    cursor: wait;
+}
+
+.badge {
+    background-color: #dc3545;
+    color: white;
+    border-radius: 50%;
+    padding: 2px 6px;
+    font-size: 12px;
+    min-width: 20px;
+    text-align: center;
+}
+
+.badge.hidden {
+    display: none;
+}
+
+.sync-status-label {
+    font-size: 11px;
+    padding: 3px 6px;
+    border-radius: 4px;
+    margin-left: 10px;
+    font-weight: bold;
+}
+
+.status-pending {
+    background-color: #ffeeba;
+    color: #856404;
+    border: 1px solid #ffe8a1;
+}
+
+.status-synced {
+    background-color: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+/* ================= Info Pendapatan Header ================= */
+.revenue-info {
+    background-color: rgba(255, 255, 255, 0.15); /* Transparan putih */
+    padding: 6px 12px;
+    border-radius: 5px;
+    font-size: 14px;
+    color: white;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+#total-revenue {
+    font-size: 16px;
+    color: #ffeb3b; /* Warna kuning emas agar menonjol */
+    letter-spacing: 0.5px;
+}

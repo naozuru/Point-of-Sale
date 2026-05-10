@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sistem Kasir (POS)</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <!-- Layar Login (Menutupi seluruh layar sebelum login) -->
+    <div
+      id="login-overlay"
+      class="modal-overlay active"
+      style="z-index: 9999; background: var(--bg-color)"
+    >
+      <div class="modal-content">
+        <h2 style="color: var(--secondary-color); margin-bottom: 5px">
+          Sistem POS Cabang
+        </h2>
+        <p style="color: #666; font-size: 14px; margin-bottom: 20px">
+          Silakan masukkan PIN untuk membuka toko.
+        </p>
+
+        <input
+          type="password"
+          id="login-pin"
+          placeholder="Masukkan 6 Digit PIN"
+          style="
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 15px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 16px;
+            text-align: center;
+            letter-spacing: 5px;
+          "
+        />
+
+        <button
+          class="checkout-btn"
+          id="btn-login"
+          onclick="prosesLogin()"
+          style="width: 100%"
+        >
+          Buka Toko
+        </button>
+      </div>
+    </div>
+
+   <header class="header">
+        <h1>Sistem Kasir Web</h1>
+        <div class="header-controls">
+            <!-- TAMBAHAN: Info Pendapatan Harian -->
+            <div class="revenue-info">
+                Pendapatan: <strong id="total-revenue">Rp 0</strong>
+            </div>
+
+            <button class="btn-sync" onclick="sinkronisasiData()" id="btn-sync">
+                🔄 Sync <span class="badge" id="sync-badge">0</span>
+            </button>
+            
+            <button class="btn-history" onclick="bukaHistory()">Riwayat Transaksi</button>
+            
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <span class="kasir-info" id="admin-info">Memuat...</span>
+                <button class="btn-delete-single" style="margin: 0; padding: 6px 12px; width: auto;" onclick="logout()">Keluar</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="pos-container">
+      <!-- Panel Kiri: Daftar Produk -->
+      <section class="products-section">
+        <div class="section-header">
+          <h2>Etalase Produk</h2>
+          <input
+            type="text"
+            id="search-bar"
+            placeholder="Cari barang..."
+            onkeyup="filterProducts()"
+          />
+        </div>
+        <!-- Tambahan Filter Kategori -->
+        <div class="category-filters">
+          <button class="btn-category active" onclick="filterKategori('Semua')">
+            Semua
+          </button>
+          <button class="btn-category" onclick="filterKategori('Minuman')">
+            Minuman
+          </button>
+          <button class="btn-category" onclick="filterKategori('Makanan')">
+            Makanan
+          </button>
+          <button class="btn-category" onclick="filterKategori('Kebutuhan')">
+            Kebutuhan
+          </button>
+        </div>
+        <div class="product-grid" id="product-grid">
+          <!-- Produk akan dimuat di sini oleh JavaScript -->
+        </div>
+      </section>
+
+      <!-- Panel Kanan: Keranjang Belanja -->
+      <section class="cart-section">
+        <h2>Keranjang Belanja</h2>
+        <div class="cart-items-container">
+          <ul class="cart-items" id="cart-items">
+            <!-- Item yang dibeli masuk ke sini -->
+          </ul>
+        </div>
+
+        <div class="cart-summary">
+          <div class="buyer-info">
+            <input
+              type="text"
+              id="buyer-name"
+              placeholder="Nama Pembeli (Opsional)"
+            />
+          </div>
+
+          <div class="summary-row">
+            <span>Total Item:</span>
+            <span id="total-items">0</span>
+          </div>
+          <div class="summary-row total-row">
+            <span>Total Bayar:</span>
+            <span id="total-price">Rp 0</span>
+          </div>
+
+          <button
+            class="checkout-btn"
+            id="checkout-btn"
+            onclick="prosesCheckout()"
+            disabled
+          >
+            Simpan Pesanan
+          </button>
+        </div>
+      </section>
+    </main>
+
+    <!-- Modal Notifikasi Sukses -->
+    <div id="success-modal" class="modal-overlay">
+      <div class="modal-content">
+        <div class="modal-icon">✅</div>
+        <h2>Transaksi Berhasil!</h2>
+        <p>Pembayaran telah diterima dan dicatat.</p>
+
+        <div class="receipt-summary">
+          <div class="receipt-row">
+            <span>Total Item:</span>
+            <strong id="modal-total-items">0</strong>
+          </div>
+          <div class="receipt-row">
+            <span>Total Bayar:</span>
+            <strong id="modal-total-price">Rp 0</strong>
+          </div>
+        </div>
+
+        <button class="btn-close-modal" onclick="tutupModal()">
+          Tutup & Lanjut
+        </button>
+      </div>
+    </div>
+
+    <!-- Modal Riwayat Transaksi -->
+    <div id="history-modal" class="modal-overlay">
+      <div class="modal-content history-content">
+        <div class="modal-header">
+          <h2>Riwayat Transaksi</h2>
+          <button class="btn-close-icon" onclick="tutupHistory()">
+            &times;
+          </button>
+        </div>
+        <div class="history-list" id="history-list">
+          <!-- Data riwayat akan dimuat di sini oleh JS -->
+        </div>
+        <button class="btn-clear-history" onclick="hapusHistory()">
+          Hapus Semua Riwayat
+        </button>
+      </div>
+    </div>
+
+    <!-- Area khusus untuk Cetak Struk Thermal -->
+    <div id="print-area">
+      <!-- Konten struk akan diisi oleh JS -->
+    </div>
+
+    <script src="script.js"></script>
+  </body>
+</html>
