@@ -1,191 +1,586 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="id" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Sistem Kasir (POS)</title>
+    <title>KasirKu — Sistem Point of Sale Modern</title>
     <link rel="stylesheet" href="style.css" />
+    <!-- Iconify untuk seluruh icon -->
+    <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
   </head>
   <body>
-    <!-- Layar Login (Menutupi seluruh layar sebelum login) -->
-    <div
-      id="login-overlay"
-      class="modal-overlay active"
-      style="z-index: 9999; background: var(--bg-color)"
-    >
-      <div class="modal-content">
-        <h2 style="color: var(--secondary-color); margin-bottom: 5px">
-          Sistem POS Cabang
-        </h2>
-        <p style="color: #666; font-size: 14px; margin-bottom: 20px">
-          Silakan masukkan PIN untuk membuka toko.
-        </p>
+    <!-- ============================================== -->
+    <!-- LAYAR LOGIN                                   -->
+    <!-- ============================================== -->
+    <div id="login-overlay" class="modal-overlay active login-overlay">
+      <div class="login-card">
+        <div class="login-brand">
+          <div class="login-logo">
+            <iconify-icon icon="mdi:point-of-sale"></iconify-icon>
+          </div>
+          <h1 class="login-title">KasirKu</h1>
+          <p class="login-subtitle">Sistem Point of Sale Modern</p>
+        </div>
 
-        <input
-          type="password"
-          id="login-pin"
-          placeholder="Masukkan 6 Digit PIN"
-          style="
-            width: 100%;
-            padding: 12px;
-            margin-bottom: 15px;
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            font-size: 16px;
-            text-align: center;
-            letter-spacing: 5px;
-          "
-        />
-
-        <button
-          class="checkout-btn"
-          id="btn-login"
-          onclick="prosesLogin()"
-          style="width: 100%"
-        >
-          Buka Toko
-        </button>
+        <div class="login-form">
+          <label for="login-pin" class="login-label">
+            <iconify-icon icon="mdi:lock-outline"></iconify-icon>
+            PIN Kasir
+          </label>
+          <input
+            type="password"
+            id="login-pin"
+            inputmode="numeric"
+            pattern="[0-9]*"
+            maxlength="8"
+            placeholder="••••"
+            autocomplete="off"
+          />
+          <p id="login-error" class="login-error"></p>
+          <button
+            class="btn btn-primary btn-block btn-lg"
+            id="btn-login"
+            onclick="prosesLogin()"
+          >
+            <iconify-icon icon="mdi:store-outline"></iconify-icon>
+            <span id="btn-login-text">Buka Toko</span>
+          </button>
+          <div class="login-hint">
+            <iconify-icon icon="mdi:information-outline"></iconify-icon>
+            Hubungi admin jika lupa PIN
+          </div>
+        </div>
       </div>
     </div>
 
-   <header class="header">
-        <h1>Sistem Kasir Web</h1>
-        <div class="header-controls">
-            <!-- TAMBAHAN: Info Pendapatan Harian -->
-            <div class="revenue-info">
-                Pendapatan: <strong id="total-revenue">Rp 0</strong>
-            </div>
-
-            <button class="btn-sync" onclick="sinkronisasiData()" id="btn-sync">
-                🔄 Sync <span class="badge" id="sync-badge">0</span>
-            </button>
-            
-            <button class="btn-history" onclick="bukaHistory()">Riwayat Transaksi</button>
-            
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <span class="kasir-info" id="admin-info">Memuat...</span>
-                <button class="btn-delete-single" style="margin: 0; padding: 6px 12px; width: auto;" onclick="logout()">Keluar</button>
-            </div>
+    <!-- ============================================== -->
+    <!-- HEADER                                         -->
+    <!-- ============================================== -->
+    <header class="header">
+      <div class="header-brand">
+        <div class="header-logo">
+          <iconify-icon icon="mdi:point-of-sale"></iconify-icon>
         </div>
+        <div>
+          <h1 class="header-title">KasirKu</h1>
+          <p class="header-subtitle" id="admin-info">Memuat...</p>
+        </div>
+      </div>
+
+      <div class="header-stats">
+        <div class="stat-pill stat-revenue" title="Pendapatan hari ini">
+          <iconify-icon icon="mdi:cash-multiple"></iconify-icon>
+          <div>
+            <div class="stat-label">Pendapatan Hari Ini</div>
+            <div class="stat-value" id="today-revenue">Rp 0</div>
+          </div>
+        </div>
+        <div class="stat-pill stat-count" title="Transaksi hari ini">
+          <iconify-icon icon="mdi:receipt-text-outline"></iconify-icon>
+          <div>
+            <div class="stat-label">Transaksi Hari Ini</div>
+            <div class="stat-value" id="today-count">0</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="header-controls">
+        <div class="header-clock" id="header-clock">--:--:--</div>
+        <div class="conn-indicator" id="conn-indicator" title="Status koneksi">
+          <iconify-icon icon="mdi:wifi-off" id="conn-icon"></iconify-icon>
+          <span id="conn-text">Offline</span>
+        </div>
+
+        <button
+          class="btn-icon"
+          onclick="toggleDarkMode()"
+          id="btn-theme"
+          title="Ganti tema"
+        >
+          <iconify-icon icon="mdi:weather-night" id="theme-icon"></iconify-icon>
+        </button>
+
+        <button
+          class="btn btn-warning"
+          onclick="sinkronisasiData(false)"
+          id="btn-sync"
+          title="Sinkronisasi ke server"
+        >
+          <iconify-icon icon="mdi:cloud-sync-outline"></iconify-icon>
+          <span>Sync</span>
+          <span class="badge" id="sync-badge">0</span>
+        </button>
+
+        <button class="btn btn-secondary" onclick="bukaHistory()">
+          <iconify-icon icon="mdi:history"></iconify-icon>
+          <span>Riwayat</span>
+        </button>
+
+        <div class="user-menu">
+          <div class="user-avatar" id="user-avatar">
+            <iconify-icon icon="mdi:account"></iconify-icon>
+          </div>
+          <button
+            class="btn-icon btn-icon-danger"
+            onclick="logout()"
+            title="Keluar"
+          >
+            <iconify-icon icon="mdi:logout"></iconify-icon>
+          </button>
+        </div>
+      </div>
+
+      <button
+        class="btn-icon mobile-cart-btn"
+        onclick="toggleCartDrawer()"
+        id="mobile-cart-btn"
+      >
+        <iconify-icon icon="mdi:cart-outline"></iconify-icon>
+        <span class="badge" id="mobile-cart-badge">0</span>
+      </button>
     </header>
 
+    <!-- ============================================== -->
+    <!-- MAIN POS                                       -->
+    <!-- ============================================== -->
     <main class="pos-container">
-      <!-- Panel Kiri: Daftar Produk -->
+      <!-- ====== Panel Kiri: Produk ====== -->
       <section class="products-section">
         <div class="section-header">
-          <h2>Etalase Produk</h2>
-          <input
-            type="text"
-            id="search-bar"
-            placeholder="Cari barang..."
-            onkeyup="filterProducts()"
-          />
+          <h2>
+            <iconify-icon icon="mdi:storefront-outline"></iconify-icon>
+            Etalase Produk
+          </h2>
+          <div class="search-wrapper">
+            <iconify-icon icon="mdi:magnify" class="search-icon"></iconify-icon>
+            <input
+              type="text"
+              id="search-bar"
+              placeholder="Cari produk... (F2)"
+              autocomplete="off"
+            />
+            <button
+              class="search-clear"
+              id="search-clear"
+              onclick="clearSearch()"
+              title="Bersihkan"
+            >
+              <iconify-icon icon="mdi:close"></iconify-icon>
+            </button>
+          </div>
         </div>
-        <!-- Tambahan Filter Kategori -->
-        <div class="category-filters">
-          <button class="btn-category active" onclick="filterKategori('Semua')">
-            Semua
+
+        <div class="category-filters" id="category-filters">
+          <button class="chip chip-active" data-cat="Semua">
+            <iconify-icon icon="mdi:apps"></iconify-icon> Semua
           </button>
-          <button class="btn-category" onclick="filterKategori('Minuman')">
-            Minuman
+          <button class="chip" data-cat="Minuman">
+            <iconify-icon icon="mdi:cup"></iconify-icon> Minuman
           </button>
-          <button class="btn-category" onclick="filterKategori('Makanan')">
-            Makanan
+          <button class="chip" data-cat="Makanan">
+            <iconify-icon icon="mdi:food-apple-outline"></iconify-icon> Makanan
           </button>
-          <button class="btn-category" onclick="filterKategori('Kebutuhan')">
-            Kebutuhan
+          <button class="chip" data-cat="Kebutuhan">
+            <iconify-icon icon="mdi:cart-outline"></iconify-icon> Kebutuhan
           </button>
         </div>
+
         <div class="product-grid" id="product-grid">
-          <!-- Produk akan dimuat di sini oleh JavaScript -->
+          <!-- Produk dimuat via JS -->
         </div>
       </section>
 
-      <!-- Panel Kanan: Keranjang Belanja -->
-      <section class="cart-section">
-        <h2>Keranjang Belanja</h2>
+      <!-- ====== Panel Kanan: Keranjang ====== -->
+      <section class="cart-section" id="cart-section">
+        <div class="cart-header">
+          <h2>
+            <iconify-icon icon="mdi:cart-outline"></iconify-icon>
+            Keranjang
+            <span class="cart-count" id="cart-count-display">0</span>
+          </h2>
+          <button
+            class="btn-icon"
+            onclick="clearCart()"
+            id="btn-clear-cart"
+            title="Kosongkan keranjang"
+            disabled
+          >
+            <iconify-icon icon="mdi:trash-can-outline"></iconify-icon>
+          </button>
+        </div>
+
         <div class="cart-items-container">
           <ul class="cart-items" id="cart-items">
-            <!-- Item yang dibeli masuk ke sini -->
+            <!-- Item keranjang via JS -->
           </ul>
+          <div class="empty-cart" id="empty-cart">
+            <iconify-icon icon="mdi:cart-off" class="empty-icon"></iconify-icon>
+            <p>Keranjang kosong</p>
+            <small>Klik produk untuk menambahkan</small>
+          </div>
         </div>
 
         <div class="cart-summary">
           <div class="buyer-info">
+            <label for="buyer-name" class="buyer-label">
+              <iconify-icon icon="mdi:account-outline"></iconify-icon>
+              Nama Pembeli
+            </label>
             <input
               type="text"
               id="buyer-name"
-              placeholder="Nama Pembeli (Opsional)"
+              placeholder="Opsional"
+              autocomplete="off"
             />
           </div>
 
           <div class="summary-row">
-            <span>Total Item:</span>
-            <span id="total-items">0</span>
+            <span>Total Item</span>
+            <span class="summary-value" id="total-items">0</span>
           </div>
           <div class="summary-row total-row">
-            <span>Total Bayar:</span>
-            <span id="total-price">Rp 0</span>
+            <span>Total Bayar</span>
+            <span class="summary-value" id="total-price">Rp 0</span>
           </div>
 
-          <button
-            class="checkout-btn"
-            id="checkout-btn"
-            onclick="prosesCheckout()"
-            disabled
-          >
-            Simpan Pesanan
-          </button>
+          <div class="cart-actions">
+            <button
+              class="btn btn-outline"
+              onclick="holdTransaction()"
+              id="btn-hold"
+              disabled
+            >
+              <iconify-icon icon="mdi:bookmark-outline"></iconify-icon>
+              Tahan
+            </button>
+            <button
+              class="btn btn-primary"
+              id="checkout-btn"
+              onclick="prosesCheckout()"
+              disabled
+            >
+              <iconify-icon icon="mdi:credit-card-outline"></iconify-icon>
+              Bayar Sekarang
+            </button>
+          </div>
         </div>
       </section>
     </main>
 
-    <!-- Modal Notifikasi Sukses -->
+    <!-- ============================================== -->
+    <!-- MODAL: PEMBAYARAN                              -->
+    <!-- ============================================== -->
+    <div id="payment-modal" class="modal-overlay">
+      <div class="modal-content payment-modal">
+        <div class="modal-header">
+          <h2>
+            <iconify-icon icon="mdi:cash-register"></iconify-icon>
+            Pembayaran
+          </h2>
+          <button
+            class="btn-close-icon"
+            onclick="tutupPayment()"
+            title="Tutup (Esc)"
+          >
+            <iconify-icon icon="mdi:close"></iconify-icon>
+          </button>
+        </div>
+
+        <div class="payment-body">
+          <div class="payment-amount-display">
+            <div class="payment-label">Total Tagihan</div>
+            <div class="payment-amount" id="payment-total">Rp 0</div>
+          </div>
+
+          <div class="payment-methods">
+            <button class="method-tab method-active" data-method="cash">
+              <iconify-icon icon="mdi:cash"></iconify-icon>
+              Tunai
+            </button>
+            <button class="method-tab" data-method="qris">
+              <iconify-icon icon="mdi:qrcode-scan"></iconify-icon>
+              QRIS
+            </button>
+            <button class="method-tab" data-method="transfer">
+              <iconify-icon icon="mdi:bank-transfer"></iconify-icon>
+              Transfer
+            </button>
+          </div>
+
+          <div class="payment-cash-area" id="payment-cash-area">
+            <label class="payment-input-label">Uang Diterima</label>
+            <div class="cash-input-wrapper">
+              <span class="cash-prefix">Rp</span>
+              <input
+                type="text"
+                id="cash-amount"
+                inputmode="numeric"
+                placeholder="0"
+                autocomplete="off"
+              />
+            </div>
+
+            <div class="quick-cash">
+              <button class="quick-cash-btn" data-amount="50000">50.000</button>
+              <button class="quick-cash-btn" data-amount="100000">
+                100.000
+              </button>
+              <button class="quick-cash-btn" data-amount="200000">
+                200.000
+              </button>
+              <button class="quick-cash-btn" data-amount="500000">
+                500.000
+              </button>
+              <button class="quick-cash-btn" data-amount="1000000">
+                1.000.000
+              </button>
+              <button
+                class="quick-cash-btn quick-cash-exact"
+                data-action="exact"
+              >
+                <iconify-icon icon="mdi:check"></iconify-icon> Pas
+              </button>
+            </div>
+
+            <div class="payment-result">
+              <div class="result-row">
+                <span>Uang Diterima</span>
+                <span id="payment-cash-display">Rp 0</span>
+              </div>
+              <div class="result-row result-change" id="payment-change-row">
+                <span>Kembalian</span>
+                <span id="payment-change">Rp 0</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="payment-qris-area hidden" id="payment-qris-area">
+            <div class="qris-display">
+              <iconify-icon icon="mdi:qrcode" class="qris-icon"></iconify-icon>
+              <p>Scan QR Code di bawah ini</p>
+              <div class="qris-placeholder">
+                <iconify-icon icon="mdi:qrcode"></iconify-icon>
+              </div>
+              <small>Pembayaran dikonfirmasi otomatis</small>
+            </div>
+          </div>
+
+          <div class="payment-transfer-area hidden" id="payment-transfer-area">
+            <div class="transfer-info">
+              <div class="transfer-row">
+                <span>Bank</span>
+                <strong>BCA</strong>
+              </div>
+              <div class="transfer-row">
+                <span>No. Rekening</span>
+                <strong>123-456-7890</strong>
+              </div>
+              <div class="transfer-row">
+                <span>Atas Nama</span>
+                <strong>Toko KasirKu</strong>
+              </div>
+              <div class="transfer-row transfer-amount">
+                <span>Jumlah</span>
+                <strong id="transfer-amount">Rp 0</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="payment-footer">
+          <button class="btn btn-outline" onclick="tutupPayment()">
+            Batal
+          </button>
+          <button
+            class="btn btn-success btn-lg"
+            id="btn-confirm-payment"
+            onclick="konfirmasiPembayaran()"
+          >
+            <iconify-icon icon="mdi:check-circle"></iconify-icon>
+            Konfirmasi Pembayaran
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- MODAL: SUKSES                                  -->
+    <!-- ============================================== -->
     <div id="success-modal" class="modal-overlay">
-      <div class="modal-content">
-        <div class="modal-icon">✅</div>
-        <h2>Transaksi Berhasil!</h2>
-        <p>Pembayaran telah diterima dan dicatat.</p>
+      <div class="modal-content success-modal">
+        <div class="success-icon-wrapper">
+          <div class="success-icon-circle">
+            <iconify-icon icon="mdi:check-bold"></iconify-icon>
+          </div>
+        </div>
+        <h2>Pembayaran Berhasil!</h2>
+        <p class="success-subtitle">Transaksi telah dicatat</p>
 
         <div class="receipt-summary">
           <div class="receipt-row">
-            <span>Total Item:</span>
+            <span>ID Transaksi</span>
+            <strong id="success-trx-id">-</strong>
+          </div>
+          <div class="receipt-row">
+            <span>Total Item</span>
             <strong id="modal-total-items">0</strong>
           </div>
           <div class="receipt-row">
-            <span>Total Bayar:</span>
+            <span>Total Bayar</span>
             <strong id="modal-total-price">Rp 0</strong>
+          </div>
+          <div class="receipt-row">
+            <span>Tunai</span>
+            <strong id="success-cash">Rp 0</strong>
+          </div>
+          <div class="receipt-row receipt-change">
+            <span>Kembalian</span>
+            <strong id="success-change">Rp 0</strong>
           </div>
         </div>
 
-        <button class="btn-close-modal" onclick="tutupModal()">
-          Tutup & Lanjut
-        </button>
-      </div>
-    </div>
-
-    <!-- Modal Riwayat Transaksi -->
-    <div id="history-modal" class="modal-overlay">
-      <div class="modal-content history-content">
-        <div class="modal-header">
-          <h2>Riwayat Transaksi</h2>
-          <button class="btn-close-icon" onclick="tutupHistory()">
-            &times;
+        <div class="success-actions">
+          <button class="btn btn-outline" onclick="tutupModal()">
+            <iconify-icon icon="mdi:plus-circle-outline"></iconify-icon>
+            Transaksi Baru
+          </button>
+          <button class="btn btn-primary" id="btn-print-after-success">
+            <iconify-icon icon="mdi:printer-outline"></iconify-icon>
+            Cetak Struk
           </button>
         </div>
-        <div class="history-list" id="history-list">
-          <!-- Data riwayat akan dimuat di sini oleh JS -->
-        </div>
-        <button class="btn-clear-history" onclick="hapusHistory()">
-          Hapus Semua Riwayat
-        </button>
       </div>
     </div>
 
-    <!-- Area khusus untuk Cetak Struk Thermal -->
-    <div id="print-area">
-      <!-- Konten struk akan diisi oleh JS -->
+    <!-- ============================================== -->
+    <!-- MODAL: RIWAYAT                                 -->
+    <!-- ============================================== -->
+    <div id="history-modal" class="modal-overlay">
+      <div class="modal-content history-modal">
+        <div class="modal-header">
+          <h2>
+            <iconify-icon icon="mdi:history"></iconify-icon>
+            Riwayat Transaksi
+          </h2>
+          <button
+            class="btn-close-icon"
+            onclick="tutupHistory()"
+            title="Tutup (Esc)"
+          >
+            <iconify-icon icon="mdi:close"></iconify-icon>
+          </button>
+        </div>
+
+        <div class="history-toolbar">
+          <div class="history-filters">
+            <button class="chip chip-sm chip-active" data-filter="all">
+              Semua
+            </button>
+            <button class="chip chip-sm" data-filter="completed">
+              Selesai
+            </button>
+            <button class="chip chip-sm" data-filter="pending">
+              Belum Bayar
+            </button>
+            <button class="chip chip-sm" data-filter="today">Hari Ini</button>
+          </div>
+          <div class="history-search">
+            <iconify-icon icon="mdi:magnify"></iconify-icon>
+            <input
+              type="text"
+              id="history-search"
+              placeholder="Cari ID / nama..."
+            />
+          </div>
+        </div>
+
+        <div class="history-list" id="history-list">
+          <!-- History via JS -->
+        </div>
+
+        <div class="history-footer">
+          <button class="btn btn-outline" onclick="exportHistory()">
+            <iconify-icon icon="mdi:download"></iconify-icon>
+            Export JSON
+          </button>
+          <button class="btn btn-outline" onclick="importHistory()">
+            <iconify-icon icon="mdi:upload"></iconify-icon>
+            Import
+          </button>
+          <button class="btn btn-danger" onclick="hapusHistory()">
+            <iconify-icon icon="mdi:delete-sweep-outline"></iconify-icon>
+            Hapus Semua
+          </button>
+        </div>
+      </div>
     </div>
+
+    <!-- ============================================== -->
+    <!-- MODAL: HELD TRANSACTIONS (Tunda)               -->
+    <!-- ============================================== -->
+    <div id="held-modal" class="modal-overlay">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>
+            <iconify-icon icon="mdi:bookmark-multiple-outline"></iconify-icon>
+            Transaksi Ditahan
+          </h2>
+          <button class="btn-close-icon" onclick="tutupHeld()">
+            <iconify-icon icon="mdi:close"></iconify-icon>
+          </button>
+        </div>
+        <div class="held-list" id="held-list">
+          <!-- Held transactions via JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- MODAL: DETAIL TRANSAKSI                        -->
+    <!-- ============================================== -->
+    <div id="detail-modal" class="modal-overlay">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>
+            <iconify-icon icon="mdi:information-outline"></iconify-icon>
+            Detail Transaksi
+          </h2>
+          <button class="btn-close-icon" onclick="tutupDetail()">
+            <iconify-icon icon="mdi:close"></iconify-icon>
+          </button>
+        </div>
+        <div class="detail-body" id="detail-body">
+          <!-- Detail via JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- MODAL: KONFIRMASI GENERIC                      -->
+    <!-- ============================================== -->
+    <div id="confirm-modal" class="modal-overlay">
+      <div class="modal-content confirm-modal">
+        <div class="confirm-icon" id="confirm-icon">
+          <iconify-icon icon="mdi:alert-circle-outline"></iconify-icon>
+        </div>
+        <h2 id="confirm-title">Konfirmasi</h2>
+        <p id="confirm-message">Apakah Anda yakin?</p>
+        <div class="confirm-actions">
+          <button class="btn btn-outline" id="confirm-cancel">Batal</button>
+          <button class="btn btn-danger" id="confirm-ok">Ya, Lanjutkan</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- AREA: CETAK STRUK (hidden, hanya untuk print)  -->
+    <!-- ============================================== -->
+    <div id="print-area"></div>
+
+    <!-- ============================================== -->
+    <!-- TOAST CONTAINER                                -->
+    <!-- ============================================== -->
+    <div class="toast-container" id="toast-container"></div>
 
     <script src="script.js"></script>
   </body>
