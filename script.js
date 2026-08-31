@@ -93,6 +93,18 @@ const debounce = (fn, wait = 250) => {
   };
 };
 
+const normalizeTimestamp = (ts) => {
+  if (typeof ts === "number" && isFinite(ts)) {
+    const d = new Date(ts);
+    if (!isNaN(d.getTime())) return d.toISOString();
+  }
+  if (typeof ts === "string" && ts.trim() !== "") {
+    const d = new Date(ts);
+    if (!isNaN(d.getTime())) return d.toISOString();
+  }
+  return new Date().toISOString();
+};
+
 // ============== TOAST ==============
 function showToast(message, type = "info", duration = 3000) {
   const container = document.getElementById("toast-container");
@@ -1077,11 +1089,13 @@ function renderHistory() {
             )})' style="background: #6c757d; color: white;">
               <iconify-icon icon="mdi:printer-outline"></iconify-icon> Cetak
             </button>
-            <button class="btn btn-warning btn-sm" onclick="batalkanSelesai('${
-              trx.id
-            }')">
+            ${
+              !isSynced
+                ? `<button class="btn btn-warning btn-sm" onclick="batalkanSelesai('${trx.id}')">
               <iconify-icon icon="mdi:undo"></iconify-icon> Batal
-            </button>
+            </button>`
+                : ""
+            }
             <button class="btn btn-danger btn-sm" onclick="hapusSatuTransaksi('${
               trx.id
             }')">
@@ -1266,6 +1280,15 @@ function batalkanSelesai(idTransaksi) {
   let history = JSON.parse(localStorage.getItem(STORAGE_KEYS.HISTORY) || "[]");
   const trxIndex = history.findIndex((t) => t.id === idTransaksi);
   if (trxIndex < 0) return;
+
+  if (history[trxIndex].isSynced) {
+    showToast(
+      "Transaksi sudah tersimpan di server. Gunakan tombol Hapus jika ingin membatalkannya.",
+      "warning"
+    );
+    return;
+  }
+
   history[trxIndex].isCompleted = false;
   history[trxIndex].cash = 0;
   history[trxIndex].change = 0;
@@ -1277,17 +1300,22 @@ function batalkanSelesai(idTransaksi) {
 }
 
 async function hapusSatuTransaksi(idTransaksi) {
+  let history = JSON.parse(localStorage.getItem(STORAGE_KEYS.HISTORY) || "[]");
+  const trx = history.find((t) => t.id === idTransaksi);
+
+  const pesanKonfirmasi =
+    trx && !trx.isSynced
+      ? "Transaksi lokal ini akan dihapus permanen."
+      : "Transaksi akan dihapus permanen dari database, dan stok produknya dikembalikan.";
+
   const ok = await showConfirm({
     title: "Hapus Transaksi?",
-    message: "Transaksi akan dihapus permanen dari database.",
+    message: pesanKonfirmasi,
     okText: "Hapus",
     danger: true,
     icon: "danger",
   });
   if (!ok) return;
-
-  let history = JSON.parse(localStorage.getItem(STORAGE_KEYS.HISTORY) || "[]");
-  const trx = history.find((t) => t.id === idTransaksi);
 
   // Hanya lokal, hapus langsung
   if (trx && !trx.isSynced) {
@@ -1295,6 +1323,7 @@ async function hapusSatuTransaksi(idTransaksi) {
     localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(history));
     renderHistory();
     updateSyncUI();
+    if (navigator.onLine) ambilDataProduk();
     showToast("Transaksi dihapus", "success");
     return;
   }
@@ -1315,7 +1344,8 @@ async function hapusSatuTransaksi(idTransaksi) {
       localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(history));
       renderHistory();
       updateSyncUI();
-      showToast("Transaksi dihapus dari server", "success");
+      ambilDataProduk();
+      showToast(result.message || "Transaksi dihapus dari server", "success");
     } else {
       showToast("Gagal: " + (result.message || ""), "error");
     }
@@ -1330,7 +1360,7 @@ async function hapusHistory() {
   const ok = await showConfirm({
     title: "⚠️ Hapus Semua Riwayat?",
     message:
-      "SEMUA transaksi di server akan dihapus permanen. Tindakan ini tidak bisa dibatalkan!",
+      "SEMUA transaksi di server akan dihapus permanen. Stok produk TIDAK akan dikembalikan. Tindakan ini tidak bisa dibatalkan!",
     okText: "Ya, Hapus Semua",
     cancelText: "Batal",
     danger: true,
@@ -1447,21 +1477,38 @@ function importHistory() {
       const data = JSON.parse(text);
       if (!Array.isArray(data)) throw new Error("Format file tidak valid");
 
-      const ok = await showConfirm({
-        title: "Import History?",
-        message: `${data.length} transaksi akan ditambahkan ke history lokal.`,
-        okText: "Import",
-      });
-      if (!ok) return;
+      const valid = data.filter(
+        (t) => t && typeof t === "object" && t.id && Array.isArray(t.items)
+      );
+      if (valid.length === 0) {
+        showToast("File tidak berisi transaksi yang valid", "error");
+        return;
+      }
 
       const existing = JSON.parse(
         localStorage.getItem(STORAGE_KEYS.HISTORY) || "[]"
       );
-      const merged = [...data, ...existing];
+      const existingIds = new Set(existing.map((t) => t.id));
+      const newOnly = valid.filter((t) => !existingIds.has(t.id));
+      if (newOnly.length === 0) {
+        showToast("Semua transaksi dalam file sudah ada di riwayat", "info");
+        return;
+      }
+
+      const ok = await showConfirm({
+        title: "Import History?",
+        message: `${newOnly.length} transaksi baru akan ditambahkan (${
+          data.length - newOnly.length
+        } duplikat dilewati).`,
+        okText: "Import",
+      });
+      if (!ok) return;
+
+      const merged = [...newOnly, ...existing];
       localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(merged));
       renderHistory();
       updateSyncUI();
-      showToast("History berhasil di-import", "success");
+      showToast(`${newOnly.length} transaksi berhasil di-import`, "success");
     } catch (err) {
       showToast("File tidak valid: " + err.message, "error");
     }
@@ -1560,6 +1607,7 @@ async function sinkronisasiData(isAuto = false) {
       localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(updated));
       renderHistory();
       updateSyncUI();
+      ambilDataProduk(); // rekonsiliasi stok dengan server
       if (!isAuto)
         showToast(
           `Berhasil sync ${pendingTransactions.length} transaksi`,
@@ -1585,17 +1633,24 @@ async function ambilDataRiwayat() {
     const result = await panggilAPI({ action: "getHistory" }, 45000);
 
     if (result.status === "success") {
-      const serverHistory = (result.data || []).slice().reverse();
+      const serverHistory = (result.data || [])
+        .slice()
+        .reverse()
+        .map((trx) => ({
+          ...trx,
+          timestamp: normalizeTimestamp(trx.timestamp),
+        }));
       const localHistory = JSON.parse(
         localStorage.getItem(STORAGE_KEYS.HISTORY) || "[]"
       );
-      const pendingHistory = localHistory.filter((trx) => !trx.isSynced);
-      // Hindari duplikat (cek berdasarkan ID)
+      // Simpan hanya record lokal yang belum tersync dan belum ada di server
       const serverIds = new Set(serverHistory.map((t) => t.id));
-      const pendingFiltered = pendingHistory.filter(
-        (t) => !serverIds.has(t.id)
+      const pendingFiltered = localHistory.filter(
+        (trx) => !trx.isSynced && !serverIds.has(trx.id)
       );
-      const combinedHistory = [...pendingFiltered, ...serverHistory];
+      const combinedHistory = [...pendingFiltered, ...serverHistory].sort(
+        (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
+      );
       localStorage.setItem(
         STORAGE_KEYS.HISTORY,
         JSON.stringify(combinedHistory)

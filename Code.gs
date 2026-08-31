@@ -410,37 +410,99 @@ function handleGetHistory(id_admin) {
 
 // ==========================================
 // 7. FUNGSI HAPUS TRANSAKSI DI SPREADSHEET
+//    (stok produk dikembalikan saat dihapus)
 // ==========================================
+function kembalikanStokDariDetail(ss, trxId, id_admin) {
+  var detailResult = getSheetData("DETAIL_TRANSAKSI");
+  var detailData = detailResult.data;
+  var sheetDetail = detailResult.sheet;
+
+  var sheetProdukData = getSheetData("DATA_PRODUK");
+  var sheetProduk = sheetProdukData.sheet;
+  var listProduk = sheetProdukData.data;
+  var stokCol = getColumnIndex(sheetProduk, "Stok");
+
+  var rowsToDelete = [];
+  var restoredCount = 0;
+
+  for (var j = detailData.length - 1; j >= 0; j--) {
+    if (String(detailData[j].ID_Transaksi) !== trxId) continue;
+
+    var itemId = String(detailData[j].ID_Produk);
+    var qty = Number(detailData[j].Qty) || 0;
+
+    if (qty > 0) {
+      for (var k = 0; k < listProduk.length; k++) {
+        if (
+          String(listProduk[k].ID_Produk) === itemId &&
+          String(listProduk[k].ID_Admin) === String(id_admin)
+        ) {
+          var stokBaru = Number(listProduk[k].Stok) + qty;
+          listProduk[k].Stok = stokBaru;
+          sheetProduk.getRange(listProduk[k].rowIndex, stokCol).setValue(stokBaru);
+          restoredCount++;
+          break;
+        }
+      }
+    }
+    rowsToDelete.push(detailData[j].rowIndex);
+  }
+
+  rowsToDelete.sort(function (a, b) {
+    return b - a;
+  });
+  for (var r = 0; r < rowsToDelete.length; r++) {
+    sheetDetail.deleteRow(rowsToDelete[r]);
+  }
+
+  return restoredCount;
+}
+
 function handleDeleteTransaction(id_admin, trx_id) {
   var trxId = String(trx_id === null || trx_id === undefined ? "" : trx_id).trim();
   if (!trxId || trxId.length > 40) {
     return createResponse({ status: "error", message: "ID transaksi tidak valid." });
   }
 
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheetTrx = ss.getSheetByName("DATA_TRANSAKSI");
-  var sheetDetail = ss.getSheetByName("DETAIL_TRANSAKSI");
+  var lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheetTrx = ss.getSheetByName("DATA_TRANSAKSI");
 
-  var dataTrx = sheetTrx.getDataRange().getValues();
-  for (var i = dataTrx.length - 1; i > 0; i--) {
-    if (String(dataTrx[i][0]) === trxId && String(dataTrx[i][2]) === String(id_admin)) {
-      sheetTrx.deleteRow(i + 1);
-      break;
+    var dataTrx = sheetTrx.getDataRange().getValues();
+    var found = false;
+    for (var i = dataTrx.length - 1; i > 0; i--) {
+      if (String(dataTrx[i][0]) === trxId && String(dataTrx[i][2]) === String(id_admin)) {
+        sheetTrx.deleteRow(i + 1);
+        found = true;
+        break;
+      }
     }
-  }
 
-  var dataDetail = sheetDetail.getDataRange().getValues();
-  for (var j = dataDetail.length - 1; j > 0; j--) {
-    if (String(dataDetail[j][0]) === trxId) {
-      sheetDetail.deleteRow(j + 1);
+    if (!found) {
+      return createResponse({ status: "error", message: "Transaksi tidak ditemukan." });
     }
-  }
 
-  return createResponse({ status: "success", message: "Transaksi berhasil dihapus dari Spreadsheet." });
+    var restoredCount = kembalikanStokDariDetail(ss, trxId, id_admin);
+
+    return createResponse({
+      status: "success",
+      message:
+        restoredCount > 0
+          ? "Transaksi dihapus dan stok " + restoredCount + " item dikembalikan."
+          : "Transaksi dihapus.",
+    });
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 // ==========================================
 // 8. FUNGSI HAPUS SEMUA RIWAYAT TOKO INI
+// Catatan: stok sengaja TIDAK dikembalikan.
+// Aksi ini untuk membersihkan catatan, bukan
+// membatalkan penjualan.
 // ==========================================
 function handleDeleteAllHistory(id_admin) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
