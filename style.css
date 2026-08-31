@@ -1021,6 +1021,34 @@ iconify-icon {
   margin-top: 4px;
 }
 
+.cart-header-actions {
+  display: flex;
+  gap: 4px;
+}
+
+#btn-held .badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+}
+
+.btn-remove-item {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-light);
+  font-size: 16px;
+  transition: all var(--t-fast);
+  flex-shrink: 0;
+}
+.btn-remove-item:hover {
+  background: var(--primary-light);
+  color: var(--danger);
+}
+
 /* ============== MODAL ============== */
 .modal-overlay {
   position: fixed;

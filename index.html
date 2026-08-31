@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>KasirKu — Sistem Point of Sale Modern</title>
+    <title>KasirKu - Sistem Point of Sale</title>
     <link rel="stylesheet" href="style.css" />
     <!-- Iconify untuk seluruh icon -->
     <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
@@ -198,15 +198,26 @@
             Keranjang
             <span class="cart-count" id="cart-count-display">0</span>
           </h2>
-          <button
-            class="btn-icon"
-            onclick="clearCart()"
-            id="btn-clear-cart"
-            title="Kosongkan keranjang"
-            disabled
-          >
-            <iconify-icon icon="mdi:trash-can-outline"></iconify-icon>
-          </button>
+          <div class="cart-header-actions">
+            <button
+              class="btn-icon"
+              onclick="bukaHeld()"
+              id="btn-held"
+              title="Transaksi yang ditahan"
+            >
+              <iconify-icon icon="mdi:bookmark-multiple-outline"></iconify-icon>
+              <span class="badge hidden" id="held-badge">0</span>
+            </button>
+            <button
+              class="btn-icon"
+              onclick="clearCart()"
+              id="btn-clear-cart"
+              title="Kosongkan keranjang"
+              disabled
+            >
+              <iconify-icon icon="mdi:trash-can-outline"></iconify-icon>
+            </button>
+          </div>
         </div>
 
         <div class="cart-items-container">

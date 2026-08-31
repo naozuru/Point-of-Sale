@@ -5,10 +5,11 @@
 
 // ============== KONFIGURASI ==============
 const API_URL =
-  "https://script.google.com/macros/s/AKfycbx60WewyRsl1Z6nf69_cxU8oyeo68fkLB4FxKKfQGBEGTq0bTcUSwH6kX8CBPsoFmw/exec";
+  "https://script.google.com/macros/s/AKfycbzXUnFJChk3TP_CbZf6IJjTcsFrFZAZEZUOb38Y22UQsW3l9xXZJjT-aNO1AD-NU2FP/exec";
 
 const STORAGE_KEYS = {
   SESSION: "pos_session",
+  TOKEN: "pos_token",
   HISTORY: "pos_history",
   HELD: "pos_held",
   THEME: "pos_theme",
@@ -230,6 +231,46 @@ function updateClock() {
   el.innerHTML = `<iconify-icon icon="mdi:clock-outline"></iconify-icon> ${d} ${t}`;
 }
 
+// ============== API CLIENT (TOKEN SESI) ==============
+async function panggilAPI(payload, timeoutMs = 30000) {
+  const token = localStorage.getItem(STORAGE_KEYS.TOKEN);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(API_URL, {
+      method: "POST",
+      body: JSON.stringify({ ...payload, token }),
+      signal: controller.signal,
+    });
+    const result = await response.json();
+
+    if (result.status === "unauthorized") {
+      sesiKedaluwarsa();
+      throw new Error("Sesi berakhir");
+    }
+    return result;
+  } catch (err) {
+    if (err.name === "AbortError") {
+      throw new Error("Server tidak merespons (timeout)");
+    }
+    if (err instanceof TypeError) {
+      throw new Error("Gagal terhubung ke server");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function sesiKedaluwarsa() {
+  localStorage.removeItem(STORAGE_KEYS.SESSION);
+  localStorage.removeItem(STORAGE_KEYS.TOKEN);
+  sessionData = null;
+  showToast("Sesi berakhir atau kedaluwarsa. Silakan login ulang.", "warning");
+  setTimeout(() => location.reload(), 1500);
+}
+
 // ============== LOGIN & SESI ==============
 async function prosesLogin() {
   const pinInput = document.getElementById("login-pin");
@@ -255,15 +296,17 @@ async function prosesLogin() {
   btnText.textContent = "Memverifikasi...";
 
   try {
-    const response = await fetch(API_URL, {
-      method: "POST",
-      body: JSON.stringify({ action: "login", pin }),
-    });
-    const result = await response.json();
+    const result = await panggilAPI({ action: "login", pin });
 
     if (result.status === "success") {
+      if (!result.token) {
+        errorEl.textContent =
+          "Backend belum diperbarui. Deploy ulang Code.gs versi terbaru.";
+        return;
+      }
       sessionData = result.data;
       localStorage.setItem(STORAGE_KEYS.SESSION, JSON.stringify(sessionData));
+      localStorage.setItem(STORAGE_KEYS.TOKEN, result.token);
 
       document.getElementById("login-overlay").classList.remove("active");
       document.getElementById("admin-info").textContent =
@@ -279,8 +322,8 @@ async function prosesLogin() {
       showToast(result.message || "Login gagal", "error");
     }
   } catch (error) {
-    errorEl.textContent = "Gagal terhubung ke server";
-    showToast("Tidak bisa terhubung ke server. Periksa koneksi Anda.", "error");
+    errorEl.textContent = error.message || "Gagal terhubung ke server";
+    showToast(error.message || "Tidak bisa terhubung ke server.", "error");
   } finally {
     btnLogin.disabled = false;
     btnText.textContent = "Buka Toko";
@@ -298,7 +341,13 @@ async function logout() {
     icon: "danger",
   });
   if (!ok) return;
+  try {
+    await panggilAPI({ action: "logout" }, 10000);
+  } catch (err) {
+    // Tetap keluar dari perangkat meskipun server tidak terjangkau
+  }
   localStorage.removeItem(STORAGE_KEYS.SESSION);
+  localStorage.removeItem(STORAGE_KEYS.TOKEN);
   location.reload();
 }
 
@@ -313,14 +362,7 @@ async function ambilDataProduk() {
   `;
 
   try {
-    const response = await fetch(API_URL, {
-      method: "POST",
-      body: JSON.stringify({
-        action: "getProducts",
-        id_admin: sessionData.id_admin,
-      }),
-    });
-    const result = await response.json();
+    const result = await panggilAPI({ action: "getProducts" }, 45000);
 
     if (result.status === "success") {
       productsData = result.data || [];
@@ -353,7 +395,9 @@ async function ambilDataProduk() {
         </button>
       </div>
     `;
-    showToast("Tidak bisa terhubung ke server", "error");
+    if (error.message !== "Sesi berakhir") {
+      showToast(error.message || "Tidak bisa terhubung ke server", "error");
+    }
   }
 }
 
@@ -587,6 +631,11 @@ function updateCartUI() {
           <iconify-icon icon="mdi:plus"></iconify-icon>
         </button>
       </div>
+      <button class="btn-remove-item" onclick="removeFromCart('${escapeHTML(
+        item.id
+      )}')" title="Hapus dari keranjang" aria-label="Hapus dari keranjang">
+        <iconify-icon icon="mdi:close"></iconify-icon>
+      </button>
     `;
     cartContainer.appendChild(li);
   });
@@ -643,6 +692,8 @@ function setPaymentMethod(method) {
   const btnConfirm = document.getElementById("btn-confirm-payment");
   if (method === "qris" || method === "transfer") {
     btnConfirm.disabled = false;
+  } else if (method === "cash") {
+    hitungKembalian();
   }
 }
 
@@ -777,7 +828,16 @@ function holdTransaction() {
   cart = [];
   document.getElementById("buyer-name").value = "";
   updateCartUI();
+  updateHeldBadge();
   showToast("Transaksi ditahan", "success");
+}
+
+function updateHeldBadge() {
+  const badge = document.getElementById("held-badge");
+  if (!badge) return;
+  const held = JSON.parse(localStorage.getItem(STORAGE_KEYS.HELD) || "[]");
+  badge.textContent = held.length;
+  badge.classList.toggle("hidden", held.length === 0);
 }
 
 function bukaHeld() {
@@ -833,18 +893,62 @@ function renderHeld() {
     .join("");
 }
 
-function resumeHeld(id) {
+async function resumeHeld(id) {
   const held = JSON.parse(localStorage.getItem(STORAGE_KEYS.HELD) || "[]");
   const item = held.find((h) => h.id === id);
   if (!item) return;
-  cart = [...item.items];
+
+  if (cart.length > 0) {
+    const ok = await showConfirm({
+      title: "Ganti Isi Keranjang?",
+      message: `Keranjang saat ini berisi ${cart.length} item dan akan diganti dengan transaksi yang ditahan.`,
+      okText: "Ya, Ganti",
+      cancelText: "Batal",
+      danger: true,
+    });
+    if (!ok) return;
+  }
+
+  let clamped = false;
+  const restored = (item.items || [])
+    .map((i) => {
+      const restoredItem = { ...i };
+      const product = productsData.find((p) => p.id === restoredItem.id);
+      if (product && restoredItem.qty > product.stock) {
+        restoredItem.qty = Math.max(0, product.stock);
+        clamped = true;
+      }
+      return restoredItem;
+    })
+    .filter((i) => i.qty > 0);
+
+  if (restored.length === 0) {
+    localStorage.setItem(
+      STORAGE_KEYS.HELD,
+      JSON.stringify(held.filter((h) => h.id !== id))
+    );
+    renderHeld();
+    updateHeldBadge();
+    showToast(
+      "Transaksi tidak bisa dilanjutkan: semua item kehabisan stok",
+      "warning"
+    );
+    return;
+  }
+
+  cart = restored;
   document.getElementById("buyer-name").value =
-    item.buyerName === "Pelanggan" ? "" : item.buyerName;
+    item.buyerName === "Pelanggan" ? "" : item.buyerName || "";
   const remaining = held.filter((h) => h.id !== id);
   localStorage.setItem(STORAGE_KEYS.HELD, JSON.stringify(remaining));
   updateCartUI();
+  updateHeldBadge();
   tutupHeld();
-  showToast("Transaksi dilanjutkan", "success");
+  if (clamped) {
+    showToast("Sebagian jumlah disesuaikan dengan stok terbaru", "warning");
+  } else {
+    showToast("Transaksi dilanjutkan", "success");
+  }
 }
 
 async function deleteHeld(id) {
@@ -861,6 +965,7 @@ async function deleteHeld(id) {
     JSON.stringify(held.filter((h) => h.id !== id))
   );
   renderHeld();
+  updateHeldBadge();
 }
 
 // ============== RIWAYAT ==============
@@ -1201,15 +1306,10 @@ async function hapusSatuTransaksi(idTransaksi) {
   }
 
   try {
-    const response = await fetch(API_URL, {
-      method: "POST",
-      body: JSON.stringify({
-        action: "deleteTransaction",
-        id_admin: sessionData.id_admin,
-        trx_id: idTransaksi,
-      }),
+    const result = await panggilAPI({
+      action: "deleteTransaction",
+      trx_id: idTransaksi,
     });
-    const result = await response.json();
     if (result.status === "success") {
       history = history.filter((t) => t.id !== idTransaksi);
       localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(history));
@@ -1220,7 +1320,9 @@ async function hapusSatuTransaksi(idTransaksi) {
       showToast("Gagal: " + (result.message || ""), "error");
     }
   } catch (err) {
-    showToast("Koneksi ke server gagal", "error");
+    if (err.message !== "Sesi berakhir") {
+      showToast(err.message || "Koneksi ke server gagal", "error");
+    }
   }
 }
 
@@ -1242,14 +1344,7 @@ async function hapusHistory() {
   }
 
   try {
-    const response = await fetch(API_URL, {
-      method: "POST",
-      body: JSON.stringify({
-        action: "deleteAllHistory",
-        id_admin: sessionData.id_admin,
-      }),
-    });
-    const result = await response.json();
+    const result = await panggilAPI({ action: "deleteAllHistory" }, 90000);
     if (result.status === "success") {
       localStorage.removeItem(STORAGE_KEYS.HISTORY);
       renderHistory();
@@ -1259,7 +1354,9 @@ async function hapusHistory() {
       showToast("Gagal: " + (result.message || ""), "error");
     }
   } catch (err) {
-    showToast("Koneksi ke server gagal", "error");
+    if (err.message !== "Sesi berakhir") {
+      showToast(err.message || "Koneksi ke server gagal", "error");
+    }
   }
 }
 
@@ -1451,15 +1548,10 @@ async function sinkronisasiData(isAuto = false) {
   }
 
   try {
-    const response = await fetch(API_URL, {
-      method: "POST",
-      body: JSON.stringify({
-        action: "syncTransactions",
-        id_admin: sessionData.id_admin,
-        transactions: pendingTransactions,
-      }),
-    });
-    const result = await response.json();
+    const result = await panggilAPI(
+      { action: "syncTransactions", transactions: pendingTransactions },
+      60000
+    );
 
     if (result.status === "success") {
       const updated = history.map((trx) =>
@@ -1477,7 +1569,9 @@ async function sinkronisasiData(isAuto = false) {
       if (!isAuto) showToast("Gagal sync: " + (result.message || ""), "error");
     }
   } catch (err) {
-    if (!isAuto) showToast("Koneksi ke server gagal", "error");
+    if (!isAuto && err.message !== "Sesi berakhir") {
+      showToast(err.message || "Koneksi ke server gagal", "error");
+    }
   } finally {
     if (syncBtn) {
       syncBtn.disabled = false;
@@ -1488,14 +1582,7 @@ async function sinkronisasiData(isAuto = false) {
 
 async function ambilDataRiwayat() {
   try {
-    const response = await fetch(API_URL, {
-      method: "POST",
-      body: JSON.stringify({
-        action: "getHistory",
-        id_admin: sessionData.id_admin,
-      }),
-    });
-    const result = await response.json();
+    const result = await panggilAPI({ action: "getHistory" }, 45000);
 
     if (result.status === "success") {
       const serverHistory = (result.data || []).slice().reverse();
@@ -1677,6 +1764,7 @@ function init() {
     setTimeout(() => document.getElementById("login-pin")?.focus(), 300);
   }
   updateSyncUI();
+  updateHeldBadge();
 }
 
 // Expose ke global
