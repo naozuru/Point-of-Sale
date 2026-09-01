@@ -303,7 +303,7 @@ function updateConnectionStatus() {
 
 // ============== JAM HEADER ==============
 function updateClock() {
-  const el = document.getElementById("header-clock");
+  const el = document.getElementById("clock-time");
   if (!el) return;
   const now = new Date();
   const d = now.toLocaleDateString("id-ID", {
@@ -317,7 +317,7 @@ function updateClock() {
     second: "2-digit",
     hour12: false,
   });
-  el.innerHTML = `<iconify-icon icon="mdi:clock-outline"></iconify-icon> ${d} ${t}`;
+  el.textContent = `${d} ${t}`;
 }
 
 // ============== API CLIENT (TOKEN SESI) ==============
@@ -1801,9 +1801,13 @@ function renderAdminProducts() {
 }
 
 function filterAdminProduk() {
-  const q = (document.getElementById("admin-search-produk")?.value || "").toLowerCase();
-  Array.from(document.querySelectorAll("#admin-product-list-data .admin-row-produk")).forEach(row => {
-    row.style.display = row.dataset.name.includes(q) ? "" : "none";
+  const input = document.getElementById("admin-search-produk");
+  if (!input) return;
+  const q = input.value.toLowerCase().trim();
+  const rows = document.querySelectorAll("#admin-product-list-data .admin-row-produk");
+  rows.forEach(row => {
+    const name = (row.dataset.name || "").toLowerCase();
+    row.style.display = name.includes(q) ? "" : "none";
   });
 }
 
@@ -2280,6 +2284,7 @@ window.sinkronisasiData = sinkronisasiData;
 window.toggleDarkMode = toggleDarkMode;
 window.showConfirm = showConfirm;
 window.showToast = showToast;
+window.filterAdminProduk = filterAdminProduk;
 window.bukaAdmin = bukaAdmin;
 window.tutupAdmin = tutupAdmin;
 window.gantiAdminTab = gantiAdminTab;

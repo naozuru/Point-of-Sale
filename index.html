@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>KasirKu - Sistem Point of Sale</title>
     <link rel="stylesheet" href="style.css" />
+    <link rel="manifest" href="manifest.json" />
     <!-- Iconify untuk seluruh icon -->
     <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
   </head>
@@ -85,7 +86,10 @@
       </div>
 
       <div class="header-controls">
-        <div class="header-clock" id="header-clock">--:--:--</div>
+        <div class="header-clock" id="header-clock">
+  <iconify-icon icon="mdi:clock-outline"></iconify-icon>
+  <span id="clock-time">--:--:--</span>
+</div>
         <div class="conn-indicator" id="conn-indicator" title="Status koneksi">
           <iconify-icon icon="mdi:wifi-off" id="conn-icon"></iconify-icon>
           <span id="conn-text">Offline</span>
@@ -714,5 +718,10 @@
     <div class="toast-container" id="toast-container"></div>
 
     <script src="script.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+</script>
   </body>
 </html>
