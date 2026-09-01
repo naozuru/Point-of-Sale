@@ -5,7 +5,7 @@
 
 // ============== KONFIGURASI ==============
 const API_URL =
-  "https://script.google.com/macros/s/AKfycbzXUnFJChk3TP_CbZf6IJjTcsFrFZAZEZUOb38Y22UQsW3l9xXZJjT-aNO1AD-NU2FP/exec";
+  "https://script.google.com/macros/s/AKfycbyiOpCMwOpa7ULuaWExQva0vev8lv6I3jgX2ZakhZBPp9AEcDUq7oCNITQq2aNmNm8/exec";
 
 const STORAGE_KEYS = {
   SESSION: "pos_session",
@@ -18,12 +18,89 @@ const STORAGE_KEYS = {
 // ============== STATE ==============
 let productsData = [];
 let cart = [];
+let historyData = []; // satu sumber kebenaran riwayat (in-memory)
+let heldData = []; // transaksi ditahan (in-memory)
 let currentCategory = "Semua";
 let sessionData = null;
 let lastSuccessTrx = null; // untuk tombol cetak di modal sukses
 let currentHistoryFilter = "all";
 let currentPaymentMethod = "cash";
 let pendingConfirm = null; // untuk modal konfirmasi generic
+
+// ============== PENYIMPANAN STATE ==============
+function muatState() {
+  try {
+    historyData = JSON.parse(localStorage.getItem(STORAGE_KEYS.HISTORY) || "[]");
+  } catch (err) {
+    historyData = [];
+  }
+  try {
+    heldData = JSON.parse(localStorage.getItem(STORAGE_KEYS.HELD) || "[]");
+  } catch (err) {
+    heldData = [];
+  }
+}
+
+function tandaiStoragePenuh(err) {
+  const penuh =
+    err &&
+    (err.name === "QuotaExceededError" ||
+      err.name === "NS_ERROR_DOM_QUOTA_REACHED" ||
+      err.code === 22);
+  if (penuh) {
+    showToast(
+      "Penyimpanan perangkat penuh! Export JSON riwayat lama lalu hapus sebagian. Data baru mungkin tidak tersimpan.",
+      "error",
+      8000
+    );
+  } else {
+    console.error("Gagal menyimpan ke localStorage:", err);
+  }
+}
+
+function simpanHistory() {
+  try {
+    localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(historyData));
+    return true;
+  } catch (err) {
+    tandaiStoragePenuh(err);
+    return false;
+  }
+}
+
+function simpanHeld() {
+  try {
+    localStorage.setItem(STORAGE_KEYS.HELD, JSON.stringify(heldData));
+    return true;
+  } catch (err) {
+    tandaiStoragePenuh(err);
+    return false;
+  }
+}
+
+window.addEventListener("storage", (e) => {
+  if (e.key === STORAGE_KEYS.HISTORY) {
+    try {
+      historyData = JSON.parse(e.newValue || "[]");
+    } catch (err) {
+      historyData = [];
+    }
+    updateSyncUI();
+    if (document.getElementById("history-modal").classList.contains("active")) {
+      renderHistory();
+    }
+  } else if (e.key === STORAGE_KEYS.HELD) {
+    try {
+      heldData = JSON.parse(e.newValue || "[]");
+    } catch (err) {
+      heldData = [];
+    }
+    updateHeldBadge();
+    if (document.getElementById("held-modal").classList.contains("active")) {
+      renderHeld();
+    }
+  }
+});
 
 // ============== UTILITAS ==============
 const formatRupiah = (angka) => {
@@ -322,7 +399,7 @@ async function prosesLogin() {
 
       document.getElementById("login-overlay").classList.remove("active");
       document.getElementById("admin-info").textContent =
-        sessionData.nama_admin;
+        result.data.nama_admin;
 
       showToast(`Selamat datang, ${sessionData.nama_admin}!`, "success");
 
@@ -825,18 +902,17 @@ function tutupModal() {
 // ============== HOLD / TUNDA TRANSAKSI ==============
 function holdTransaction() {
   if (cart.length === 0) return;
-  const held = JSON.parse(localStorage.getItem(STORAGE_KEYS.HELD) || "[]");
   const payload = {
     id: "HLD-" + Date.now(),
     timestamp: new Date().toLocaleString("id-ID"),
     buyerName:
       document.getElementById("buyer-name").value.trim() || "Pelanggan",
-    items: [...cart],
+    items: cart.map((c) => ({ ...c })),
     total: cart.reduce((s, i) => s + i.price * i.qty, 0),
     totalItem: cart.reduce((s, i) => s + i.qty, 0),
   };
-  held.unshift(payload);
-  localStorage.setItem(STORAGE_KEYS.HELD, JSON.stringify(held));
+  heldData.unshift(payload);
+  simpanHeld();
   cart = [];
   document.getElementById("buyer-name").value = "";
   updateCartUI();
@@ -847,9 +923,8 @@ function holdTransaction() {
 function updateHeldBadge() {
   const badge = document.getElementById("held-badge");
   if (!badge) return;
-  const held = JSON.parse(localStorage.getItem(STORAGE_KEYS.HELD) || "[]");
-  badge.textContent = held.length;
-  badge.classList.toggle("hidden", held.length === 0);
+  badge.textContent = heldData.length;
+  badge.classList.toggle("hidden", heldData.length === 0);
 }
 
 function bukaHeld() {
@@ -862,7 +937,7 @@ function tutupHeld() {
 }
 
 function renderHeld() {
-  const held = JSON.parse(localStorage.getItem(STORAGE_KEYS.HELD) || "[]");
+  const held = heldData;
   const container = document.getElementById("held-list");
   if (!container) return;
   if (held.length === 0) {
@@ -906,8 +981,7 @@ function renderHeld() {
 }
 
 async function resumeHeld(id) {
-  const held = JSON.parse(localStorage.getItem(STORAGE_KEYS.HELD) || "[]");
-  const item = held.find((h) => h.id === id);
+  const item = heldData.find((h) => h.id === id);
   if (!item) return;
 
   if (cart.length > 0) {
@@ -935,10 +1009,8 @@ async function resumeHeld(id) {
     .filter((i) => i.qty > 0);
 
   if (restored.length === 0) {
-    localStorage.setItem(
-      STORAGE_KEYS.HELD,
-      JSON.stringify(held.filter((h) => h.id !== id))
-    );
+    heldData = heldData.filter((h) => h.id !== id);
+    simpanHeld();
     renderHeld();
     updateHeldBadge();
     showToast(
@@ -951,8 +1023,8 @@ async function resumeHeld(id) {
   cart = restored;
   document.getElementById("buyer-name").value =
     item.buyerName === "Pelanggan" ? "" : item.buyerName || "";
-  const remaining = held.filter((h) => h.id !== id);
-  localStorage.setItem(STORAGE_KEYS.HELD, JSON.stringify(remaining));
+  heldData = heldData.filter((h) => h.id !== id);
+  simpanHeld();
   updateCartUI();
   updateHeldBadge();
   tutupHeld();
@@ -971,20 +1043,16 @@ async function deleteHeld(id) {
     okText: "Hapus",
   });
   if (!ok) return;
-  const held = JSON.parse(localStorage.getItem(STORAGE_KEYS.HELD) || "[]");
-  localStorage.setItem(
-    STORAGE_KEYS.HELD,
-    JSON.stringify(held.filter((h) => h.id !== id))
-  );
+  heldData = heldData.filter((h) => h.id !== id);
+  simpanHeld();
   renderHeld();
   updateHeldBadge();
 }
 
 // ============== RIWAYAT ==============
 function simpanKeRiwayat(trx) {
-  let history = JSON.parse(localStorage.getItem(STORAGE_KEYS.HISTORY) || "[]");
-  history.unshift(trx);
-  localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(history));
+  historyData.unshift(trx);
+  simpanHistory();
 }
 
 function bukaHistory() {
@@ -1008,11 +1076,7 @@ function renderHistory() {
   const search = (document.getElementById("history-search").value || "")
     .toLowerCase()
     .trim();
-  const allHistory = JSON.parse(
-    localStorage.getItem(STORAGE_KEYS.HISTORY) || "[]"
-  );
-
-  let history = [...allHistory];
+  let history = historyData.slice();
   const today = todayKey();
 
   // Filter
@@ -1244,29 +1308,28 @@ function hitungKembalianHistory(id, totalBayar) {
 }
 
 function selesaikanDiHistory(idTransaksi) {
-  let history = JSON.parse(localStorage.getItem(STORAGE_KEYS.HISTORY) || "[]");
-  const trxIndex = history.findIndex((t) => t.id === idTransaksi);
+  const trxIndex = historyData.findIndex((t) => t.id === idTransaksi);
   if (trxIndex < 0) return;
 
   const cashInput = document.getElementById(`cash-${idTransaksi}`).value;
   const cash = formatRupiahInput(cashInput);
-  const totalBayar = history[trxIndex].total;
+  const totalBayar = historyData[trxIndex].total;
 
   if (cash < totalBayar) {
     showToast("Uang tidak cukup", "error");
     return;
   }
 
-  history[trxIndex].cash = cash;
-  history[trxIndex].change = cash - totalBayar;
-  history[trxIndex].isCompleted = true;
-  history[trxIndex].isSynced = false;
-  history[trxIndex].paymentMethod = "cash";
-  history[trxIndex].timestamp =
-    history[trxIndex].timestamp || new Date().toISOString();
-  history[trxIndex].timestampLocal = new Date().toLocaleString("id-ID");
+  historyData[trxIndex].cash = cash;
+  historyData[trxIndex].change = cash - totalBayar;
+  historyData[trxIndex].isCompleted = true;
+  historyData[trxIndex].isSynced = false;
+  historyData[trxIndex].paymentMethod = "cash";
+  historyData[trxIndex].timestamp =
+    historyData[trxIndex].timestamp || new Date().toISOString();
+  historyData[trxIndex].timestampLocal = new Date().toLocaleString("id-ID");
 
-  localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(history));
+  simpanHistory();
   renderHistory();
   updateSyncUI();
   showToast("Transaksi diselesaikan", "success");
@@ -1277,11 +1340,10 @@ function selesaikanDiHistory(idTransaksi) {
 }
 
 function batalkanSelesai(idTransaksi) {
-  let history = JSON.parse(localStorage.getItem(STORAGE_KEYS.HISTORY) || "[]");
-  const trxIndex = history.findIndex((t) => t.id === idTransaksi);
+  const trxIndex = historyData.findIndex((t) => t.id === idTransaksi);
   if (trxIndex < 0) return;
 
-  if (history[trxIndex].isSynced) {
+  if (historyData[trxIndex].isSynced) {
     showToast(
       "Transaksi sudah tersimpan di server. Gunakan tombol Hapus jika ingin membatalkannya.",
       "warning"
@@ -1289,19 +1351,18 @@ function batalkanSelesai(idTransaksi) {
     return;
   }
 
-  history[trxIndex].isCompleted = false;
-  history[trxIndex].cash = 0;
-  history[trxIndex].change = 0;
-  history[trxIndex].isSynced = false;
-  localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(history));
+  historyData[trxIndex].isCompleted = false;
+  historyData[trxIndex].cash = 0;
+  historyData[trxIndex].change = 0;
+  historyData[trxIndex].isSynced = false;
+  simpanHistory();
   renderHistory();
   updateSyncUI();
   showToast("Status dibatalkan", "info");
 }
 
 async function hapusSatuTransaksi(idTransaksi) {
-  let history = JSON.parse(localStorage.getItem(STORAGE_KEYS.HISTORY) || "[]");
-  const trx = history.find((t) => t.id === idTransaksi);
+  const trx = historyData.find((t) => t.id === idTransaksi);
 
   const pesanKonfirmasi =
     trx && !trx.isSynced
@@ -1319,8 +1380,8 @@ async function hapusSatuTransaksi(idTransaksi) {
 
   // Hanya lokal, hapus langsung
   if (trx && !trx.isSynced) {
-    history = history.filter((t) => t.id !== idTransaksi);
-    localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(history));
+    historyData = historyData.filter((t) => t.id !== idTransaksi);
+    simpanHistory();
     renderHistory();
     updateSyncUI();
     if (navigator.onLine) ambilDataProduk();
@@ -1340,8 +1401,8 @@ async function hapusSatuTransaksi(idTransaksi) {
       trx_id: idTransaksi,
     });
     if (result.status === "success") {
-      history = history.filter((t) => t.id !== idTransaksi);
-      localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(history));
+      historyData = historyData.filter((t) => t.id !== idTransaksi);
+      simpanHistory();
       renderHistory();
       updateSyncUI();
       ambilDataProduk();
@@ -1376,7 +1437,8 @@ async function hapusHistory() {
   try {
     const result = await panggilAPI({ action: "deleteAllHistory" }, 90000);
     if (result.status === "success") {
-      localStorage.removeItem(STORAGE_KEYS.HISTORY);
+      historyData = [];
+      simpanHistory();
       renderHistory();
       updateSyncUI();
       showToast("Semua riwayat dihapus", "success");
@@ -1446,14 +1508,11 @@ function cetakStruk(trx) {
 
 // ============== EXPORT / IMPORT ==============
 function exportHistory() {
-  const history = JSON.parse(
-    localStorage.getItem(STORAGE_KEYS.HISTORY) || "[]"
-  );
-  if (history.length === 0) {
+  if (historyData.length === 0) {
     showToast("Tidak ada data untuk di-export", "warning");
     return;
   }
-  const blob = new Blob([JSON.stringify(history, null, 2)], {
+  const blob = new Blob([JSON.stringify(historyData, null, 2)], {
     type: "application/json",
   });
   const url = URL.createObjectURL(blob);
@@ -1477,18 +1536,17 @@ function importHistory() {
       const data = JSON.parse(text);
       if (!Array.isArray(data)) throw new Error("Format file tidak valid");
 
-      const valid = data.filter(
-        (t) => t && typeof t === "object" && t.id && Array.isArray(t.items)
-      );
+      const valid = data
+        .filter(
+          (t) => t && typeof t === "object" && t.id && Array.isArray(t.items)
+        )
+        .map((t) => ({ ...t, timestamp: normalizeTimestamp(t.timestamp) }));
       if (valid.length === 0) {
         showToast("File tidak berisi transaksi yang valid", "error");
         return;
       }
 
-      const existing = JSON.parse(
-        localStorage.getItem(STORAGE_KEYS.HISTORY) || "[]"
-      );
-      const existingIds = new Set(existing.map((t) => t.id));
+      const existingIds = new Set(historyData.map((t) => t.id));
       const newOnly = valid.filter((t) => !existingIds.has(t.id));
       if (newOnly.length === 0) {
         showToast("Semua transaksi dalam file sudah ada di riwayat", "info");
@@ -1504,8 +1562,8 @@ function importHistory() {
       });
       if (!ok) return;
 
-      const merged = [...newOnly, ...existing];
-      localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(merged));
+      historyData = [...newOnly, ...historyData];
+      simpanHistory();
       renderHistory();
       updateSyncUI();
       showToast(`${newOnly.length} transaksi berhasil di-import`, "success");
@@ -1518,10 +1576,7 @@ function importHistory() {
 
 // ============== SINKRONISASI ==============
 function updateSyncUI() {
-  const history = JSON.parse(
-    localStorage.getItem(STORAGE_KEYS.HISTORY) || "[]"
-  );
-  const pendingSync = history.filter(
+  const pendingSync = historyData.filter(
     (trx) => trx.isCompleted && !trx.isSynced
   ).length;
   const syncBtn = document.getElementById("btn-sync");
@@ -1542,9 +1597,7 @@ function updateSyncUI() {
 }
 
 function updateRevenueUI() {
-  const history = JSON.parse(
-    localStorage.getItem(STORAGE_KEYS.HISTORY) || "[]"
-  );
+  const history = historyData;
   const today = todayKey();
 
   let todayTotal = 0;
@@ -1574,10 +1627,7 @@ async function sinkronisasiData(isAuto = false) {
     return;
   }
 
-  const history = JSON.parse(
-    localStorage.getItem(STORAGE_KEYS.HISTORY) || "[]"
-  );
-  const pendingTransactions = history.filter(
+  const pendingTransactions = historyData.filter(
     (trx) => trx.isCompleted && !trx.isSynced
   );
 
@@ -1601,10 +1651,12 @@ async function sinkronisasiData(isAuto = false) {
     );
 
     if (result.status === "success") {
-      const updated = history.map((trx) =>
-        trx.isCompleted && !trx.isSynced ? { ...trx, isSynced: true } : trx
-      );
-      localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(updated));
+      // Tandai hanya transaksi yang benar-benar dikirim (hindari race)
+      const sentIds = new Set(pendingTransactions.map((t) => t.id));
+      historyData.forEach((trx) => {
+        if (sentIds.has(trx.id)) trx.isSynced = true;
+      });
+      simpanHistory();
       renderHistory();
       updateSyncUI();
       ambilDataProduk(); // rekonsiliasi stok dengan server
@@ -1640,21 +1692,15 @@ async function ambilDataRiwayat() {
           ...trx,
           timestamp: normalizeTimestamp(trx.timestamp),
         }));
-      const localHistory = JSON.parse(
-        localStorage.getItem(STORAGE_KEYS.HISTORY) || "[]"
-      );
       // Simpan hanya record lokal yang belum tersync dan belum ada di server
       const serverIds = new Set(serverHistory.map((t) => t.id));
-      const pendingFiltered = localHistory.filter(
+      const pendingFiltered = historyData.filter(
         (trx) => !trx.isSynced && !serverIds.has(trx.id)
       );
-      const combinedHistory = [...pendingFiltered, ...serverHistory].sort(
+      historyData = [...pendingFiltered, ...serverHistory].sort(
         (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
       );
-      localStorage.setItem(
-        STORAGE_KEYS.HISTORY,
-        JSON.stringify(combinedHistory)
-      );
+      simpanHistory();
       updateSyncUI();
       if (
         document.getElementById("history-modal").classList.contains("active")
@@ -1664,6 +1710,357 @@ async function ambilDataRiwayat() {
     }
   } catch (err) {
     console.log("Gagal menarik riwayat:", err);
+  }
+}
+
+// ============== MANAJEMEN TOKO (KELOLA) ==============
+let editingProductId = null;
+let editingKasirId = null;
+let kasirList = [];
+let adminSearchQuery = "";
+
+function bukaAdmin() {
+  gantiAdminTab("produk");
+  renderAdminProducts();
+  document.getElementById("admin-modal").classList.add("active");
+}
+
+function tutupAdmin() {
+  document.getElementById("admin-modal").classList.remove("active");
+  resetFormProduk(true);
+  resetFormKasir(true);
+}
+
+function gantiAdminTab(tab) {
+  document.querySelectorAll(".admin-tabs .chip").forEach((c) => {
+    c.classList.toggle("chip-active", c.dataset.tab === tab);
+  });
+  document.getElementById("admin-tab-produk").classList.toggle("hidden", tab !== "produk");
+  document.getElementById("admin-tab-kasir").classList.toggle("hidden", tab !== "kasir");
+  if (tab === "kasir") muatKelolaKasir();
+}
+
+// ---- Produk ----
+function renderAdminProducts() {
+  const list = document.getElementById("admin-product-list");
+  if (!list) return;
+
+  isiDatalistKategori();
+
+  if (productsData.length === 0) {
+    list.innerHTML = `
+      <div class="empty-state">
+        <iconify-icon icon="mdi:package-variant-closed"></iconify-icon>
+        <p>Belum ada produk. Klik "Tambah Produk" untuk menambahkan.</p>
+      </div>
+    `;
+    return;
+  }
+
+  list.innerHTML = `
+    <div class="product-list-container">
+      <div class="search-wrapper-sm">
+        <iconify-icon icon="mdi:magnify" class="search-icon"></iconify-icon>
+        <input type="text" id="admin-search-produk" placeholder="Cari produk..." oninput="filterAdminProduk()" />
+      </div>
+      <div class="admin-list" id="admin-product-list-data">
+        <div class="admin-row admin-row-produk head">
+          <span><iconify-icon icon="mdi:label"></iconify-icon> Nama Produk</span>
+          <span><iconify-icon icon="mdi:tag"></iconify-icon> Kategori</span>
+          <span><iconify-icon icon="mdi:cash"></iconify-icon> Harga</span>
+          <span><iconify-icon icon="mdi:package-variant"></iconify-icon> Stok</span>
+          <span>Aksi</span>
+        </div>
+        ${productsData
+          .map((p) => {
+            const stockClass = p.stock <= 0 ? "danger" : p.stock <= 5 ? "warn" : "";
+            const stockText = p.stock <= 0 
+              ? "<iconify-icon icon='mdi:close-circle'></iconify-icon> Habis" 
+              : p.stock <= 5 
+                ? `<iconify-icon icon="mdi:alert-circle"></iconify-icon> ${p.stock}` 
+                : `${p.stock}`;
+            return `
+            <div class="admin-row admin-row-produk" data-id="${escapeHTML(p.id)}" data-name="${escapeHTML(p.name.toLowerCase())}">
+              <span class="cell-strong">${escapeHTML(p.name)}</span>
+              <span><span class="category-chip">${escapeHTML(p.category || "-")}</span></span>
+              <span style="font-weight:700;color:var(--primary)">${formatRupiah(p.price)}</span>
+              <span><span class="cell-badge-stok ${stockClass}">${stockText}</span></span>
+              <span class="row-actions">
+                <button class="btn-action-xs edit" onclick="startEditProduk('${escapeHTML(p.id)}')" title="Edit">
+                  <iconify-icon icon="mdi:pencil-outline"></iconify-icon>
+                </button>
+                <button class="btn-action-xs delete" onclick="deleteProduk('${escapeHTML(p.id)}')" title="Hapus">
+                  <iconify-icon icon="mdi:trash-can-outline"></iconify-icon>
+                </button>
+              </span>
+            </div>`;
+          })
+          .join("")}
+      </div>
+    </div>`;
+}
+
+function filterAdminProduk() {
+  const q = (document.getElementById("admin-search-produk")?.value || "").toLowerCase();
+  Array.from(document.querySelectorAll("#admin-product-list-data .admin-row-produk")).forEach(row => {
+    row.style.display = row.dataset.name.includes(q) ? "" : "none";
+  });
+}
+
+function isiDatalistKategori() {
+  const dl = document.getElementById("kategori-list");
+  if (!dl) return;
+  const cats = [...new Set(productsData.map((p) => p.category).filter(Boolean))];
+  dl.innerHTML = cats.map((c) => `<option value="${escapeHTML(c)}"></option>`).join("");
+}
+
+function toggleFormProduk() {
+  const area = document.getElementById("form-produk-area");
+  if (!area.classList.contains("hidden")) {
+    resetFormProduk(true);
+    return;
+  }
+  area.classList.remove("hidden");
+  document.getElementById("pf-nama").focus();
+}
+
+function resetFormProduk(hide = false) {
+  editingProductId = null;
+  document.getElementById("pf-nama").value = "";
+  document.getElementById("pf-kategori").value = "";
+  document.getElementById("pf-harga").value = "";
+  document.getElementById("pf-stok").value = "0";
+  if (hide) document.getElementById("form-produk-area").classList.add("hidden");
+}
+
+function startEditProduk(id) {
+  const p = productsData.find((x) => x.id === id);
+  if (!p) return;
+  editingProductId = p.id;
+  document.getElementById("pf-nama").value = p.name;
+  document.getElementById("pf-kategori").value = p.category;
+  document.getElementById("pf-harga").value = String(p.price);
+  document.getElementById("pf-stok").value = String(p.stock);
+  document.getElementById("form-produk-area").classList.remove("hidden");
+  document.getElementById("pf-nama").focus();
+}
+
+async function simpanProduk(e) {
+  e.preventDefault();
+  const name = document.getElementById("pf-nama").value.trim();
+  const category = document.getElementById("pf-kategori").value.trim();
+  const price = formatRupiahInput(document.getElementById("pf-harga").value);
+  const stock = parseInt(document.getElementById("pf-stok").value, 10);
+
+  if (name === "") {
+    showToast("Nama produk wajib diisi", "error");
+    return;
+  }
+  if (isNaN(stock) || stock < 0) {
+    showToast("Stok tidak valid", "error");
+    return;
+  }
+
+  try {
+    const result = await panggilAPI({
+      action: "saveProduct",
+      product: {
+        id: editingProductId || "",
+        name,
+        category,
+        price,
+        stock,
+      },
+    });
+    if (result.status === "success") {
+      showToast(result.message || "Produk disimpan", "success");
+      resetFormProduk(true);
+      await ambilDataProduk();
+      renderAdminProducts();
+    } else {
+      showToast(result.message || "Gagal menyimpan produk", "error");
+    }
+  } catch (err) {
+    if (err.message !== "Sesi berakhir") showToast(err.message || "Koneksi ke server gagal", "error");
+  }
+}
+
+async function deleteProduk(id) {
+  const p = productsData.find((x) => x.id === id);
+  const ok = await showConfirm({
+    title: "Hapus Produk?",
+    message: `"${p ? p.name : "Produk"}" akan dihapus dari etalase. Riwayat transaksi lama tetap ada.`,
+    danger: true,
+    okText: "Hapus",
+    icon: "danger",
+  });
+  if (!ok) return;
+
+  try {
+    const result = await panggilAPI({ action: "deleteProduct", product_id: id });
+    if (result.status === "success") {
+      showToast(result.message || "Produk dihapus", "success");
+      await ambilDataProduk();
+      renderAdminProducts();
+    } else {
+      showToast(result.message || "Gagal menghapus produk", "error");
+    }
+  } catch (err) {
+    if (err.message !== "Sesi berakhir") showToast(err.message || "Koneksi ke server gagal", "error");
+  }
+}
+
+// ---- Kasir ----
+async function muatKelolaKasir() {
+  const list = document.getElementById("admin-kasir-list");
+  list.innerHTML = `<div style="text-align:center;padding:20px;color:var(--text-muted);"><iconify-icon icon="mdi:loading" class="spin"></iconify-icon> Memuat...</div>`;
+  try {
+    const result = await panggilAPI({ action: "getAdmins" });
+    if (result.status === "success") {
+      kasirList = result.data || [];
+      renderAdminKasir();
+    } else {
+      list.innerHTML = "";
+      showToast(result.message || "Gagal memuat kasir", "error");
+    }
+  } catch (err) {
+    list.innerHTML = "";
+    if (err.message !== "Sesi berakhir") showToast(err.message || "Koneksi ke server gagal", "error");
+  }
+}
+
+function renderAdminKasir() {
+  const list = document.getElementById("admin-kasir-list");
+  if (!list) return;
+  if (kasirList.length === 0) {
+    list.innerHTML = `
+      <div class="empty-state">
+        <iconify-icon icon="mdi:account-group-outline"></iconify-icon>
+        <p>Tidak ada kasir.</p>
+      </div>
+    `;
+    return;
+  }
+  list.innerHTML = `
+    <div class="admin-list">
+      <div class="admin-row admin-row-kasir head">
+        <span><iconify-icon icon="mdi:account"></iconify-icon> Nama Kasir</span>
+        <span><iconify-icon icon="mdi:shield-key"></iconify-icon> PIN</span>
+        <span><iconify-icon icon="mdi:toggle-switch"></iconify-icon> Status</span>
+        <span>Aksi</span>
+      </div>
+      ${kasirList
+        .map((k) => `
+        <div class="admin-row admin-row-kasir">
+          <span class="cell-strong">
+            ${escapeHTML(k.nama_admin)}
+            ${k.is_self ? '<span class="category-chip" style="margin-left:6px;"><iconify-icon icon="mdi:account-check"></iconify-icon> Anda</span>' : ""}
+          </span>
+          <span style="font-family:monospace;letter-spacing:2px;">••••</span>
+          <span>
+            <span class="kasir-status ${k.status}">
+              <iconify-icon icon="${k.status === "aktif" ? "mdi:check-circle" : "mdi:pause-circle"}"></iconify-icon>
+              ${k.status === "aktif" ? "Aktif" : "Nonaktif"}
+            </span>
+          </span>
+          <span class="row-actions">
+            <button class="btn-action-xs edit" onclick="startEditKasir('${escapeHTML(k.kasir_id)}')" title="Edit">
+              <iconify-icon icon="mdi:pencil-outline"></iconify-icon>
+            </button>
+            <button class="btn-action-xs delete" onclick="deleteKasir('${escapeHTML(k.kasir_id)}')" title="Hapus">
+              <iconify-icon icon="mdi:trash-can-outline"></iconify-icon>
+            </button>
+          </span>
+        </div>`)
+        .join("")}
+    </div>`;
+}
+
+function toggleFormKasir() {
+  const area = document.getElementById("form-kasir-area");
+  if (!area.classList.contains("hidden")) {
+    resetFormKasir(true);
+    return;
+  }
+  resetFormKasir(false);
+  area.classList.remove("hidden");
+  document.getElementById("kf-nama").focus();
+}
+
+function resetFormKasir(hide = false) {
+  editingKasirId = null;
+  document.getElementById("kf-nama").value = "";
+  document.getElementById("kf-pin").value = "";
+  document.getElementById("kf-status").value = "aktif";
+  document.getElementById("kf-hint").textContent = "PIN 4-8 digit angka.";
+  if (hide) document.getElementById("form-kasir-area").classList.add("hidden");
+}
+
+function startEditKasir(id) {
+  const k = kasirList.find((x) => x.kasir_id === id);
+  if (!k) return;
+  editingKasirId = k.kasir_id;
+  document.getElementById("kf-nama").value = k.nama_admin;
+  document.getElementById("kf-pin").value = "";
+  document.getElementById("kf-status").value = k.status;
+  document.getElementById("kf-hint").textContent = "Kosongkan PIN untuk mempertahankan PIN lama.";
+  document.getElementById("form-kasir-area").classList.remove("hidden");
+  document.getElementById("kf-nama").focus();
+}
+
+async function simpanKasir(e) {
+  e.preventDefault();
+  const nama = document.getElementById("kf-nama").value.trim();
+  const pin = document.getElementById("kf-pin").value.trim();
+  const status = document.getElementById("kf-status").value;
+
+  if (nama === "") {
+    showToast("Nama kasir wajib diisi", "error");
+    return;
+  }
+  if (pin !== "" && !/^\d{4,8}$/.test(pin)) {
+    showToast("PIN harus 4-8 digit angka", "error");
+    return;
+  }
+
+  try {
+    const result = await panggilAPI({
+      action: "saveAdmin",
+      admin: { kasir_id: editingKasirId || "", nama_admin: nama, pin, status },
+    });
+    if (result.status === "success") {
+      showToast(result.message || "Kasir disimpan", "success");
+      resetFormKasir(true);
+      await muatKelolaKasir();
+    } else {
+      showToast(result.message || "Gagal menyimpan kasir", "error");
+    }
+  } catch (err) {
+    if (err.message !== "Sesi berakhir") showToast(err.message || "Koneksi ke server gagal", "error");
+  }
+}
+
+async function deleteKasir(id) {
+  const k = kasirList.find((x) => x.kasir_id === id);
+  const ok = await showConfirm({
+    title: "Hapus Kasir?",
+    message: `PIN milik "${k ? k.nama_admin : "kasir"}" tidak akan bisa login lagi.`,
+    danger: true,
+    okText: "Hapus",
+    icon: "danger",
+  });
+  if (!ok) return;
+
+  try {
+    const result = await panggilAPI({ action: "deleteAdmin", kasir_id: id });
+    if (result.status === "success") {
+      showToast(result.message || "Kasir dihapus", "success");
+      await muatKelolaKasir();
+    } else {
+      showToast(result.message || "Gagal menghapus kasir", "error");
+    }
+  } catch (err) {
+    if (err.message !== "Sesi berakhir") showToast(err.message || "Koneksi ke server gagal", "error");
   }
 }
 
@@ -1684,6 +2081,7 @@ function setupKeyboardShortcuts() {
         "held-modal",
         "detail-modal",
         "confirm-modal",
+        "admin-modal",
         "login-overlay",
       ].forEach((id) => {
         const el = document.getElementById(id);
@@ -1712,6 +2110,19 @@ function setupKeyboardShortcuts() {
       const newPos = cursorPos + (newLength - oldLength);
       e.target.setSelectionRange(newPos, newPos);
       hitungKembalian();
+    });
+  }
+
+  // Harga input formatting
+  const pfHarga = document.getElementById("pf-harga");
+  if (pfHarga) {
+    pfHarga.addEventListener("input", () => {
+      const cursorPos = pfHarga.selectionStart;
+      const oldLength = pfHarga.value.length;
+      pfHarga.value = formatNumberInput(pfHarga.value);
+      const newLength = pfHarga.value.length;
+      const newPos = cursorPos + (newLength - oldLength);
+      pfHarga.setSelectionRange(newPos, newPos);
     });
   }
 
@@ -1786,9 +2197,15 @@ function setupKeyboardShortcuts() {
 
 // ============== INISIALISASI ==============
 function init() {
+  muatState();
+
   // Load tema
   const savedTheme = localStorage.getItem(STORAGE_KEYS.THEME) || "light";
   applyTheme(savedTheme);
+
+  // Set footer year
+  const footerYear = document.getElementById("footer-year");
+  if (footerYear) footerYear.textContent = new Date().getFullYear();
 
   // Setup semua event
   setupKeyboardShortcuts();
@@ -1863,5 +2280,16 @@ window.sinkronisasiData = sinkronisasiData;
 window.toggleDarkMode = toggleDarkMode;
 window.showConfirm = showConfirm;
 window.showToast = showToast;
+window.bukaAdmin = bukaAdmin;
+window.tutupAdmin = tutupAdmin;
+window.gantiAdminTab = gantiAdminTab;
+window.toggleFormProduk = toggleFormProduk;
+window.startEditProduk = startEditProduk;
+window.deleteProduk = deleteProduk;
+window.simpanProduk = simpanProduk;
+window.toggleFormKasir = toggleFormKasir;
+window.startEditKasir = startEditKasir;
+window.deleteKasir = deleteKasir;
+window.simpanKasir = simpanKasir;
 
 document.addEventListener("DOMContentLoaded", init);

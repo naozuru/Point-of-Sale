@@ -116,6 +116,11 @@
           <span>Riwayat</span>
         </button>
 
+        <button class="btn btn-secondary btn-kelola" onclick="bukaAdmin()">
+          <iconify-icon icon="mdi:store-cog-outline"></iconify-icon>
+          <span>Kelola</span>
+        </button>
+
         <div class="user-menu">
           <div class="user-avatar" id="user-avatar">
             <iconify-icon icon="mdi:account"></iconify-icon>
@@ -277,6 +282,15 @@
         </div>
       </section>
     </main>
+
+    <!-- ============================================== -->
+    <!-- FOOTER                                         -->
+    <!-- ============================================== -->
+    <footer class="footer">
+      <span>© <span id="footer-year"></span> KasirKu POS</span>
+      <span class="footer-divider">|</span>
+      <span>Copyright by <strong>NaoZuru</strong> (Mr Rayhan)</span>
+    </footer>
 
     <!-- ============================================== -->
     <!-- MODAL: PEMBAYARAN                              -->
@@ -579,6 +593,112 @@
         <div class="confirm-actions">
           <button class="btn btn-outline" id="confirm-cancel">Batal</button>
           <button class="btn btn-danger" id="confirm-ok">Ya, Lanjutkan</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================== -->
+    <!-- MODAL: MANAJEMEN TOKO (KELOLA)                 -->
+    <!-- ============================================== -->
+    <div id="admin-modal" class="modal-overlay">
+      <div class="modal-content admin-modal">
+        <div class="modal-header">
+          <h2>
+            <iconify-icon icon="mdi:store-cog-outline"></iconify-icon>
+            Manajemen Toko
+          </h2>
+          <button class="btn-close-icon" onclick="tutupAdmin()" title="Tutup (Esc)">
+            <iconify-icon icon="mdi:close"></iconify-icon>
+          </button>
+        </div>
+
+        <div class="admin-tabs">
+          <button class="chip chip-active" data-tab="produk" onclick="gantiAdminTab('produk')">
+            <iconify-icon icon="mdi:package-variant"></iconify-icon> Produk
+          </button>
+          <button class="chip" data-tab="kasir" onclick="gantiAdminTab('kasir')">
+            <iconify-icon icon="mdi:account-group-outline"></iconify-icon> Kasir
+          </button>
+        </div>
+
+        <div id="admin-tab-produk" class="admin-tab">
+          <div id="form-produk-area" class="admin-form hidden">
+            <form id="form-produk" onsubmit="simpanProduk(event)">
+              <div class="admin-form-grid">
+                <div class="field">
+                  <label for="pf-nama"><iconify-icon icon="mdi:label"></iconify-icon> Nama Produk</label>
+                  <input type="text" id="pf-nama" maxlength="100" placeholder="cth: Es Teh Manis" />
+                </div>
+                <div class="field">
+                  <label for="pf-kategori"><iconify-icon icon="mdi:tag"></iconify-icon> Kategori</label>
+                  <input type="text" id="pf-kategori" list="kategori-list" maxlength="50" placeholder="cth: Minuman" />
+                  <datalist id="kategori-list"></datalist>
+                </div>
+                <div class="field">
+                  <label for="pf-harga"><iconify-icon icon="mdi:cash"></iconify-icon> Harga (Rp)</label>
+                  <input type="text" id="pf-harga" inputmode="numeric" placeholder="0" />
+                </div>
+                <div class="field">
+                  <label for="pf-stok"><iconify-icon icon="mdi:package-variant"></iconify-icon> Stok</label>
+                  <input type="number" id="pf-stok" min="0" step="1" value="0" />
+                </div>
+              </div>
+              <div class="admin-form-actions">
+                <button type="button" class="btn btn-outline" onclick="toggleFormProduk()">Batal</button>
+                <button type="submit" class="btn btn-success">
+                  <iconify-icon icon="mdi:content-save-outline"></iconify-icon> Simpan
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <div class="admin-toolbar">
+            <button class="btn btn-primary" onclick="toggleFormProduk()">
+              <iconify-icon icon="mdi:plus"></iconify-icon> Tambah Produk
+            </button>
+          </div>
+
+          <div class="admin-list" id="admin-product-list"></div>
+        </div>
+
+        <div id="admin-tab-kasir" class="admin-tab hidden">
+          <div id="form-kasir-area" class="admin-form hidden">
+            <form id="form-kasir" onsubmit="simpanKasir(event)">
+              <div class="admin-form-grid admin-form-grid-3">
+                <div class="field">
+                  <label for="kf-nama"><iconify-icon icon="mdi:account"></iconify-icon> Nama Kasir</label>
+                  <input type="text" id="kf-nama" maxlength="50" placeholder="cth: Budi" />
+                </div>
+                <div class="field">
+                  <label for="kf-pin"><iconify-icon icon="mdi:shield-key"></iconify-icon> PIN (4-8 digit)</label>
+                  <input type="password" id="kf-pin" inputmode="numeric" maxlength="8" autocomplete="new-password" />
+                </div>
+                <div class="field">
+                  <label for="kf-status"><iconify-icon icon="mdi:toggle-switch"></iconify-icon> Status</label>
+                  <select id="kf-status">
+                    <option value="aktif">Aktif</option>
+                    <option value="nonaktif">Nonaktif</option>
+                  </select>
+                </div>
+              </div>
+              <p class="form-hint" id="kf-hint">PIN 4-8 digit angka.</p>
+              <div class="admin-form-actions">
+                <button type="button" class="btn btn-outline" onclick="toggleFormKasir()">Batal</button>
+                <button type="submit" class="btn btn-success">
+                  <iconify-icon icon="mdi:content-save-outline"></iconify-icon> Simpan
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <div class="admin-toolbar">
+            <button class="btn btn-primary" onclick="toggleFormKasir()">
+              <iconify-icon icon="mdi:account-plus-outline"></iconify-icon> Tambah Kasir
+            </button>
+          </div>
+
+          <div class="admin-list" id="admin-kasir-list"></div>
+          <p class="form-hint">Semua kasir di sini berbagi produk &amp; riwayat toko yang sama, masing-masing dengan PIN sendiri.</p>
         </div>
       </div>
     </div>

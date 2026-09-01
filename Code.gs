@@ -44,6 +44,16 @@ function doPost(e) {
       return handleDeleteTransaction(session.id_admin, requestData.trx_id);
     } else if (action === "deleteAllHistory") {
       return handleDeleteAllHistory(session.id_admin);
+    } else if (action === "saveProduct") {
+      return handleSaveProduct(session.id_admin, requestData.product);
+    } else if (action === "deleteProduct") {
+      return handleDeleteProduct(session.id_admin, requestData.product_id);
+    } else if (action === "getAdmins") {
+      return handleGetAdmins(session);
+    } else if (action === "saveAdmin") {
+      return handleSaveAdmin(session, requestData.admin);
+    } else if (action === "deleteAdmin") {
+      return handleDeleteAdmin(session, requestData.kasir_id);
     } else {
       return createResponse({ status: "error", message: "Action tidak dikenali." });
     }
@@ -93,6 +103,29 @@ function getColumnIndex(sheet, headerName) {
   throw new Error("Kolom " + headerName + " tidak ditemukan.");
 }
 
+function ensureColumn(sheet, name) {
+  var lastCol = sheet.getLastColumn();
+  if (lastCol > 0) {
+    var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+    for (var i = 0; i < headers.length; i++) {
+      if (String(headers[i]).trim().toUpperCase() === name.toUpperCase()) {
+        return i + 1;
+      }
+    }
+  }
+  sheet.getRange(1, lastCol + 1).setValue(name);
+  return lastCol + 1;
+}
+
+function buatIdAcak(prefix) {
+  return (
+    prefix +
+    "-" +
+    Date.now().toString(36).toUpperCase() +
+    Math.floor(Math.random() * 1000)
+  );
+}
+
 // ==========================================
 // 1. SESSION & TOKEN
 // ==========================================
@@ -101,12 +134,14 @@ function getSessionSheet() {
   var sheet = ss.getSheetByName(SESSION_SHEET_NAME);
   if (!sheet) {
     sheet = ss.insertSheet(SESSION_SHEET_NAME);
-    sheet.appendRow(["Token", "ID_Admin", "Nama_Admin", "Dibuat", "Kadaluarsa"]);
+    sheet.appendRow(["Token", "ID_Admin", "Nama_Admin", "Dibuat", "Kadaluarsa", "Kasir_ID"]);
+  } else {
+    ensureColumn(sheet, "Kasir_ID");
   }
   return sheet;
 }
 
-function createSession(idAdmin, namaAdmin) {
+function createSession(idAdmin, namaAdmin, kasirId) {
   var lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
@@ -123,7 +158,7 @@ function createSession(idAdmin, namaAdmin) {
     }
 
     var token = Utilities.getUuid();
-    sheet.appendRow([token, String(idAdmin), String(namaAdmin), new Date(nowMs), expires]);
+    sheet.appendRow([token, String(idAdmin), String(namaAdmin), new Date(nowMs), expires, String(kasirId || "")]);
     return token;
   } finally {
     lock.releaseLock();
@@ -147,6 +182,7 @@ function validateSession(token) {
         token: token,
         id_admin: String(data[i][1]),
         nama_admin: String(data[i][2]),
+        kasir_id: String(data[i][5] || ""),
       };
     }
   }
@@ -167,6 +203,22 @@ function deleteSession(token) {
 function handleLogout(session) {
   deleteSession(session.token);
   return createResponse({ status: "success", message: "Logout berhasil." });
+}
+
+function pastikanKasirId(sheetAdmin, rowIndex) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var col = ensureColumn(sheetAdmin, "ID_Kasir");
+    var val = String(sheetAdmin.getRange(rowIndex, col).getValue() || "").trim();
+    if (val === "") {
+      val = buatIdAcak("K");
+      sheetAdmin.getRange(rowIndex, col).setValue(val);
+    }
+    return val;
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 // ==========================================
@@ -205,7 +257,9 @@ function handleLogin(pin) {
     });
   }
 
-  var adminData = getSheetData("DATA_ADMIN").data;
+  var adminSheetData = getSheetData("DATA_ADMIN");
+  var adminSheet = adminSheetData.sheet;
+  var adminData = adminSheetData.data;
 
   for (var i = 0; i < adminData.length; i++) {
     if (String(adminData[i].PIN) === pinStr) {
@@ -213,7 +267,8 @@ function handleLogin(pin) {
         return createResponse({ status: "error", message: "Akun ini sedang dinonaktifkan." });
       }
 
-      var token = createSession(adminData[i].ID_Admin, adminData[i].Nama_Admin);
+      var kasirId = pastikanKasirId(adminSheet, adminData[i].rowIndex);
+      var token = createSession(adminData[i].ID_Admin, adminData[i].Nama_Admin, kasirId);
       clearLoginFailure(pinStr);
 
       return createResponse({
@@ -222,6 +277,7 @@ function handleLogin(pin) {
         data: {
           id_admin: String(adminData[i].ID_Admin),
           nama_admin: String(adminData[i].Nama_Admin),
+          kasir_id: kasirId,
         },
       });
     }
@@ -527,4 +583,274 @@ function handleDeleteAllHistory(id_admin) {
   }
 
   return createResponse({ status: "success", message: "Semua riwayat toko berhasil dihapus." });
+}
+
+// ==========================================
+// 9. FUNGSI KELOLA PRODUK
+// ==========================================
+function handleSaveProduct(id_admin, product) {
+  if (!product || typeof product !== "object") {
+    return createResponse({ status: "error", message: "Data produk tidak valid." });
+  }
+
+  var name = String(product.name || "").trim();
+  var category = String(product.category || "").trim() || "Lainnya";
+  var price = Number(product.price);
+  var stock = Number(product.stock);
+
+  if (name === "" || name.length > 100) {
+    return createResponse({ status: "error", message: "Nama produk wajib diisi (maksimal 100 karakter)." });
+  }
+  if (category.length > 50) {
+    return createResponse({ status: "error", message: "Kategori maksimal 50 karakter." });
+  }
+  if (isNaN(price) || price < 0) {
+    return createResponse({ status: "error", message: "Harga tidak valid." });
+  }
+  if (isNaN(stock) || stock < 0 || Math.floor(stock) !== stock) {
+    return createResponse({ status: "error", message: "Stok harus bilangan bulat 0 atau lebih." });
+  }
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var produkResult = getSheetData("DATA_PRODUK");
+    var sheet = produkResult.sheet;
+    var rows = produkResult.data;
+    var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+    var colNama = getColumnIndex(sheet, "Nama_Produk");
+    var colKategori = getColumnIndex(sheet, "Kategori");
+    var colHarga = getColumnIndex(sheet, "Harga");
+    var colStok = getColumnIndex(sheet, "Stok");
+
+    if (product.id) {
+      for (var i = 0; i < rows.length; i++) {
+        if (
+          String(rows[i].ID_Produk) === String(product.id) &&
+          String(rows[i].ID_Admin) === String(id_admin)
+        ) {
+          sheet.getRange(rows[i].rowIndex, colNama).setValue(name);
+          sheet.getRange(rows[i].rowIndex, colKategori).setValue(category);
+          sheet.getRange(rows[i].rowIndex, colHarga).setValue(price);
+          sheet.getRange(rows[i].rowIndex, colStok).setValue(stock);
+          return createResponse({ status: "success", message: "Produk berhasil diperbarui." });
+        }
+      }
+      return createResponse({ status: "error", message: "Produk tidak ditemukan." });
+    }
+
+    var newId = buatIdAcak("P");
+    var values = {
+      ID_Produk: newId,
+      ID_Admin: String(id_admin),
+      Nama_Produk: name,
+      Kategori: category,
+      Harga: price,
+      Stok: stock,
+    };
+    var newRow = [];
+    for (var h = 0; h < headers.length; h++) {
+      var key = String(headers[h]);
+      newRow.push(values.hasOwnProperty(key) ? values[key] : "");
+    }
+    sheet.appendRow(newRow);
+    return createResponse({ status: "success", message: "Produk berhasil ditambahkan.", id: newId });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function handleDeleteProduct(id_admin, product_id) {
+  var productId = String(product_id === null || product_id === undefined ? "" : product_id).trim();
+  if (!productId || productId.length > 40) {
+    return createResponse({ status: "error", message: "ID produk tidak valid." });
+  }
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var produkResult = getSheetData("DATA_PRODUK");
+    var rows = produkResult.data;
+    var sheet = produkResult.sheet;
+
+    for (var i = rows.length - 1; i >= 0; i--) {
+      if (
+        String(rows[i].ID_Produk) === productId &&
+        String(rows[i].ID_Admin) === String(id_admin)
+      ) {
+        sheet.deleteRow(rows[i].rowIndex);
+        return createResponse({ status: "success", message: "Produk berhasil dihapus." });
+      }
+    }
+    return createResponse({ status: "error", message: "Produk tidak ditemukan." });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// ==========================================
+// 10. FUNGSI KELOLA KASIR (multi-PIN satu toko)
+// ==========================================
+function handleGetAdmins(session) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("DATA_ADMIN");
+    if (!sheet) return createResponse({ status: "error", message: "Sheet DATA_ADMIN tidak ditemukan." });
+    var colId = ensureColumn(sheet, "ID_Kasir");
+
+    var rows = getSheetData("DATA_ADMIN").data;
+    var list = [];
+    for (var i = 0; i < rows.length; i++) {
+      if (String(rows[i].ID_Admin) !== String(session.id_admin)) continue;
+      var kasirId = String(rows[i].ID_Kasir || "").trim();
+      if (kasirId === "") {
+        kasirId = buatIdAcak("K");
+        sheet.getRange(rows[i].rowIndex, colId).setValue(kasirId);
+      }
+      list.push({
+        kasir_id: kasirId,
+        nama_admin: String(rows[i].Nama_Admin || ""),
+        status: String(rows[i].Status || "").toLowerCase() === "aktif" ? "aktif" : "nonaktif",
+        is_self: kasirId !== "" && kasirId === String(session.kasir_id || ""),
+      });
+    }
+    return createResponse({ status: "success", data: list });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function handleSaveAdmin(session, admin) {
+  if (!admin || typeof admin !== "object") {
+    return createResponse({ status: "error", message: "Data kasir tidak valid." });
+  }
+
+  var nama = String(admin.nama_admin || "").trim();
+  var status = String(admin.status || "").toLowerCase() === "nonaktif" ? "nonaktif" : "aktif";
+  var pin = String(admin.pin === null || admin.pin === undefined ? "" : admin.pin).trim();
+
+  if (nama === "" || nama.length > 50) {
+    return createResponse({ status: "error", message: "Nama kasir wajib diisi (maksimal 50 karakter)." });
+  }
+  if (pin !== "" && !/^\d{4,8}$/.test(pin)) {
+    return createResponse({ status: "error", message: "PIN harus 4-8 digit angka." });
+  }
+  if (admin.kasir_id && String(admin.kasir_id) === String(session.kasir_id || "") && status !== "aktif") {
+    return createResponse({ status: "error", message: "Anda tidak bisa menonaktifkan akun sendiri." });
+  }
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("DATA_ADMIN");
+    if (!sheet) return createResponse({ status: "error", message: "Sheet DATA_ADMIN tidak ditemukan." });
+    ensureColumn(sheet, "ID_Kasir");
+
+    var rows = getSheetData("DATA_ADMIN").data;
+    var colNama = getColumnIndex(sheet, "Nama_Admin");
+    var colStatus = getColumnIndex(sheet, "Status");
+    var colPin = getColumnIndex(sheet, "PIN");
+
+    var storeRows = [];
+    for (var i = 0; i < rows.length; i++) {
+      if (String(rows[i].ID_Admin) === String(session.id_admin)) storeRows.push(rows[i]);
+    }
+
+    if (admin.kasir_id) {
+      var target = null;
+      for (var j = 0; j < storeRows.length; j++) {
+        if (String(storeRows[j].ID_Kasir || "") === String(admin.kasir_id)) {
+          target = storeRows[j];
+          break;
+        }
+      }
+      if (!target) return createResponse({ status: "error", message: "Kasir tidak ditemukan." });
+
+      if (status !== "aktif") {
+        var aktifLain = 0;
+        for (var a = 0; a < storeRows.length; a++) {
+          if (String(storeRows[a].ID_Kasir || "") !== String(admin.kasir_id) && String(storeRows[a].Status || "").toLowerCase() === "aktif") {
+            aktifLain++;
+          }
+        }
+        if (aktifLain === 0) {
+          return createResponse({ status: "error", message: "Tidak bisa menonaktifkan kasir aktif terakhir." });
+        }
+      }
+
+      sheet.getRange(target.rowIndex, colNama).setValue(nama);
+      sheet.getRange(target.rowIndex, colStatus).setValue(status);
+      if (pin !== "") sheet.getRange(target.rowIndex, colPin).setValue(pin);
+      return createResponse({ status: "success", message: "Data kasir diperbarui." });
+    }
+
+    if (pin === "") {
+      return createResponse({ status: "error", message: "PIN wajib diisi untuk kasir baru." });
+    }
+    for (var b = 0; b < rows.length; b++) {
+      if (String(rows[b].PIN) === pin) {
+        return createResponse({ status: "error", message: "PIN sudah dipakai. Gunakan PIN lain." });
+      }
+    }
+
+    var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    var values = {
+      ID_Admin: String(session.id_admin),
+      Nama_Admin: nama,
+      PIN: pin,
+      Status: "aktif",
+      ID_Kasir: buatIdAcak("K"),
+    };
+    var newRow = [];
+    for (var h = 0; h < headers.length; h++) {
+      var key = String(headers[h]);
+      newRow.push(values.hasOwnProperty(key) ? values[key] : "");
+    }
+    sheet.appendRow(newRow);
+    return createResponse({ status: "success", message: "Kasir baru berhasil ditambahkan." });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function handleDeleteAdmin(session, kasir_id) {
+  var kasirId = String(kasir_id === null || kasir_id === undefined ? "" : kasir_id).trim();
+  if (!kasirId || kasirId.length > 40) {
+    return createResponse({ status: "error", message: "ID kasir tidak valid." });
+  }
+  if (kasirId === String(session.kasir_id || "")) {
+    return createResponse({ status: "error", message: "Anda tidak bisa menghapus akun sendiri." });
+  }
+
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000);
+  try {
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("DATA_ADMIN");
+    if (!sheet) return createResponse({ status: "error", message: "Sheet DATA_ADMIN tidak ditemukan." });
+    ensureColumn(sheet, "ID_Kasir");
+
+    var rows = getSheetData("DATA_ADMIN").data;
+    var target = null;
+    var aktifLain = 0;
+    for (var i = 0; i < rows.length; i++) {
+      if (String(rows[i].ID_Admin) !== String(session.id_admin)) continue;
+      if (String(rows[i].ID_Kasir || "") === kasirId) {
+        target = rows[i];
+      } else if (String(rows[i].Status || "").toLowerCase() === "aktif") {
+        aktifLain++;
+      }
+    }
+
+    if (!target) return createResponse({ status: "error", message: "Kasir tidak ditemukan." });
+    if (String(target.Status || "").toLowerCase() === "aktif" && aktifLain === 0) {
+      return createResponse({ status: "error", message: "Tidak bisa menghapus kasir aktif terakhir." });
+    }
+
+    sheet.deleteRow(target.rowIndex);
+    return createResponse({ status: "success", message: "Kasir berhasil dihapus." });
+  } finally {
+    lock.releaseLock();
+  }
 }
