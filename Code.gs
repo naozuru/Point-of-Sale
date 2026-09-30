@@ -18,9 +18,12 @@ function doPost(e) {
     var requestData = JSON.parse(e.postData.contents);
     var action = requestData.action;
 
-    // Login adalah satu-satunya action tanpa token
+    // Action publik (tanpa token): login & peringkat pendapatan
     if (action === "login") {
       return handleLogin(requestData.pin);
+    }
+    if (action === "getLeaderboard") {
+      return handleGetLeaderboard();
     }
 
     // Semua action lain WAJIB punya token sesi yang valid
@@ -62,7 +65,12 @@ function doPost(e) {
   }
 }
 
-function doGet() {
+function doGet(e) {
+  // Akses publik via GET dengan query ?action=getLeaderboard
+  var action = e && e.parameter ? e.parameter.action : null;
+  if (action === "getLeaderboard") {
+    return handleGetLeaderboard();
+  }
   return createResponse({ status: "ok", message: "KasirKu API aktif" });
 }
 
@@ -852,5 +860,77 @@ function handleDeleteAdmin(session, kasir_id) {
     return createResponse({ status: "success", message: "Kasir berhasil dihapus." });
   } finally {
     lock.releaseLock();
+  }
+}
+
+// ==========================================
+// 11. FUNGSI PERINGKAT PENDAPATAN TOKO (PUBLIK)
+// ==========================================
+function handleGetLeaderboard() {
+  var cache = CacheService.getScriptCache();
+  var cached = cache.get("leaderboard_v1");
+  if (cached) {
+    return createResponse(JSON.parse(cached));
+  }
+
+  try {
+    // 1. Peta nama toko: ID_Admin -> Nama_Admin (toko)
+    var adminResult = getSheetData("DATA_ADMIN");
+    var adminRows = adminResult.data;
+    var storeNames = {};
+    for (var i = 0; i < adminRows.length; i++) {
+      var idAdmin = String(adminRows[i].ID_Admin || "").trim();
+      if (!idAdmin) continue;
+      if (storeNames[idAdmin]) continue; // ambil nama admin pertama per toko
+      storeNames[idAdmin] = String(adminRows[i].Nama_Admin || "").trim() || idAdmin;
+    }
+
+    // 2. Agregasi pendapatan per toko dari DATA_TRANSAKSI
+    var trxResult = getSheetData("DATA_TRANSAKSI");
+    var trxRows = trxResult.data;
+    var revenueMap = {};
+    var countMap = {};
+    for (var j = 0; j < trxRows.length; j++) {
+      var idTrx = String(trxRows[j].ID_Admin || "").trim();
+      if (!idTrx) continue;
+      var total = Number(trxRows[j].Total_Bayar) || 0;
+      if (!revenueMap[idTrx]) {
+        revenueMap[idTrx] = 0;
+        countMap[idTrx] = 0;
+      }
+      revenueMap[idTrx] += total;
+      countMap[idTrx] += 1;
+    }
+
+    // 3. Gabungkan semua toko (termasuk yang belum ada transaksi)
+    var leaderboard = [];
+    var ids = Object.keys(storeNames);
+    for (var k = 0; k < ids.length; k++) {
+      var id = ids[k];
+      leaderboard.push({
+        id_admin: id,
+        nama_toko: storeNames[id],
+        pendapatan: revenueMap[id] || 0,
+        jumlah_transaksi: countMap[id] || 0,
+      });
+    }
+
+    // 4. Urutkan dari pendapatan terbesar
+    leaderboard.sort(function (a, b) {
+      if (b.pendapatan !== a.pendapatan) return b.pendapatan - a.pendapatan;
+      return b.jumlah_transaksi - a.jumlah_transaksi;
+    });
+
+    var result = {
+      status: "success",
+      data: leaderboard,
+      updatedAt: new Date().toISOString(),
+    };
+
+    cache.put("leaderboard_v1", JSON.stringify(result), 30); // cache 30 detik
+
+    return createResponse(result);
+  } catch (error) {
+    return createResponse({ status: "error", message: error.message });
   }
 }

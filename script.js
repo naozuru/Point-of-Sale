@@ -4,8 +4,8 @@
    ================================================== */
 
 // ============== KONFIGURASI ==============
-const API_URL =
-  "https://script.google.com/macros/s/AKfycbyiOpCMwOpa7ULuaWExQva0vev8lv6I3jgX2ZakhZBPp9AEcDUq7oCNITQq2aNmNm8/exec";
+// API URL dari config.js (shared)
+const API_URL = window.API_URL;
 
 const STORAGE_KEYS = {
   SESSION: "pos_session",

@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Afternoon Cafe 2026 - Store Revenue Ranking</title>
+    <script src="config.js"></script>
+    <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
+    <style>
+      :root {
+        --green: #004632;
+        --green-dark: #00301f;
+        --green-light: #e6f2ec;
+        --white: #ffffff;
+        --gold: #d4a017;
+        --silver: #8a9bb0;
+        --bronze: #b56b2c;
+        --muted: rgba(255, 255, 255, 0.72);
+        --card: rgba(255, 255, 255, 0.07);
+        --border: rgba(255, 255, 255, 0.14);
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        min-height: 100vh;
+        background: radial-gradient(
+            ellipse at 50% -15%,
+            #0a6b4c 0%,
+            var(--green) 55%,
+            var(--green-dark) 100%
+          ),
+          var(--green);
+        color: var(--white);
+        font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 40px 24px 60px;
+        -webkit-font-smoothing: antialiased;
+        overflow-x: hidden;
+      }
+
+      header {
+        text-align: center;
+        margin-bottom: 36px;
+      }
+
+      header .event-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 3px;
+        text-transform: uppercase;
+        color: var(--green);
+        background: var(--white);
+        border-radius: 999px;
+        padding: 7px 20px;
+        margin-bottom: 16px;
+      }
+
+      header .event-badge iconify-icon {
+        font-size: 16px;
+      }
+
+      header h1 {
+        font-size: clamp(34px, 6vw, 66px);
+        font-weight: 800;
+        letter-spacing: -1px;
+        line-height: 1.1;
+        color: var(--white);
+      }
+
+      header .school {
+        margin-top: 10px;
+        font-size: clamp(14px, 2vw, 19px);
+        font-weight: 600;
+        color: var(--white);
+        opacity: 0.92;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+      }
+
+      header .sub {
+        margin-top: 14px;
+        font-size: 14px;
+        color: var(--muted);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .live-dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: #4ade80;
+        box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.6);
+        animation: pulse 2s infinite;
+        display: inline-block;
+      }
+
+      @keyframes pulse {
+        0% {
+          box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.6);
+        }
+        70% {
+          box-shadow: 0 0 0 10px rgba(74, 222, 128, 0);
+        }
+        100% {
+          box-shadow: 0 0 0 0 rgba(74, 222, 128, 0);
+        }
+      }
+
+      .countdown-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(255, 255, 255, 0.12);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 5px 14px;
+        font-variant-numeric: tabular-nums;
+        font-weight: 600;
+      }
+
+      .countdown-chip iconify-icon {
+        font-size: 15px;
+      }
+
+      .countdown-bar-wrap {
+        width: min(420px, 80vw);
+        height: 5px;
+        background: rgba(255, 255, 255, 0.15);
+        border-radius: 999px;
+        margin: 14px auto 0;
+        overflow: hidden;
+      }
+
+      #countdown-bar {
+        height: 100%;
+        width: 100%;
+        background: var(--white);
+        border-radius: 999px;
+        transition: width 1s linear;
+      }
+
+      main {
+        width: 100%;
+        max-width: 1000px;
+      }
+
+      /* ===== PODIUM (Top 3) ===== */
+      .podium {
+        display: grid;
+        grid-template-columns: 1.6fr 2fr 1.6fr;
+        gap: 16px;
+        align-items: end;
+        margin-bottom: 40px;
+      }
+
+      .podium .podium-card {
+        background: var(--white);
+        color: var(--green-dark);
+        border-radius: 20px;
+        padding: 24px 20px;
+        text-align: center;
+        position: relative;
+        overflow: hidden;
+        box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
+        transition: transform 0.3s ease;
+      }
+      .podium .podium-card:hover {
+        transform: translateY(-4px);
+      }
+
+      .podium .rank-1 {
+        order: 2;
+        padding: 34px 20px 30px;
+        border-top: 8px solid var(--gold);
+      }
+      .podium .rank-2 {
+        order: 1;
+        border-top: 8px solid var(--silver);
+      }
+      .podium .rank-3 {
+        order: 3;
+        border-top: 8px solid var(--bronze);
+      }
+
+      .podium .rank-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
+        margin-bottom: 8px;
+        padding: 4px 12px;
+        border-radius: 999px;
+      }
+      .podium .rank-1 .rank-badge {
+        background: #fdf3d7;
+        color: #92600a;
+      }
+      .podium .rank-2 .rank-badge {
+        background: #eef2f7;
+        color: #54657c;
+      }
+      .podium .rank-3 .rank-badge {
+        background: #faecdd;
+        color: #8a4d15;
+      }
+
+      .podium .store-name {
+        font-size: clamp(26px, 4vw, 38px);
+        font-weight: 800;
+        white-space: nowrap;
+        overflow: hidden;
+        line-height: 1.2;
+        color: var(--green-dark);
+        margin-top: 10px;
+        max-width: 100%;
+      }
+
+      .podium .revenue {
+        margin-top: 12px;
+        font-size: clamp(22px, 3vw, 30px);
+        font-weight: 800;
+        font-variant-numeric: tabular-nums;
+        color: var(--green);
+      }
+
+      .podium .meta {
+        margin-top: 8px;
+        font-size: 13px;
+        color: #5b6b62;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+      }
+
+      /* ===== LIST (Rank 4+) ===== */
+      .list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .list-head {
+        display: grid;
+        grid-template-columns: 70px 1fr auto auto;
+        gap: 16px;
+        padding: 0 20px;
+        font-size: 12px;
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .list-row {
+        display: grid;
+        grid-template-columns: 70px 1fr auto auto;
+        gap: 16px;
+        align-items: center;
+        background: var(--white);
+        color: var(--green-dark);
+        border-radius: 14px;
+        padding: 16px 20px;
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+        transition: transform 0.25s ease;
+      }
+      .list-row:hover {
+        transform: translateX(-4px);
+      }
+
+      .list-row .pos {
+        font-size: 18px;
+        font-weight: 800;
+        color: var(--green);
+        text-align: center;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .list-row .name {
+        font-size: 17px;
+        font-weight: 700;
+        word-break: break-word;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .list-row .name iconify-icon {
+        color: var(--green);
+        font-size: 18px;
+        flex-shrink: 0;
+      }
+
+      .list-row .trx {
+        font-size: 13px;
+        color: #5b6b62;
+        font-variant-numeric: tabular-nums;
+        text-align: right;
+      }
+
+      .list-row .rev {
+        font-size: 18px;
+        font-weight: 800;
+        color: var(--green);
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* ===== EMPTY / ERROR ===== */
+      .state {
+        text-align: center;
+        color: var(--white);
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px dashed rgba(255, 255, 255, 0.35);
+        border-radius: 16px;
+        padding: 60px 20px;
+        font-size: 16px;
+      }
+
+      footer {
+        margin-top: 48px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+
+      @media (max-width: 600px) {
+        .podium {
+          grid-template-columns: 1fr;
+          align-items: stretch;
+        }
+        .podium .rank-1,
+        .podium .rank-2,
+        .podium .rank-3 {
+          order: 0;
+        }
+        .list-head {
+          display: none;
+        }
+        .list-row {
+          grid-template-columns: 42px 1fr auto;
+        }
+        .list-row .trx {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="event-badge">
+        <iconify-icon icon="mdi:coffee-outline"></iconify-icon>
+        Afternoon Cafe 2026
+      </div>
+      <h1>Store Revenue Ranking</h1>
+      <div class="school">
+        <iconify-icon icon="mdi:school-outline"></iconify-icon>
+        Sekolah Tunas Mekar Indonesia Senior High School
+      </div>
+      <div class="sub">
+        <span class="live-dot"></span>
+        <span id="updated-text">Loading data...</span>
+        <span class="countdown-chip">
+          <iconify-icon icon="mdi:timer-refresh-outline"></iconify-icon>
+          <span>Next update in <span id="countdown">60</span>s</span>
+        </span>
+      </div>
+      <div class="countdown-bar-wrap">
+        <div id="countdown-bar"></div>
+      </div>
+    </header>
+
+    <main>
+      <div class="podium" id="podium"></div>
+      <div class="state" id="state" hidden></div>
+    </main>
+
+    <footer>Auto-refresh every minute</footer>
+
+    <script>
+      const API_URL = window.API_URL;
+      const REFRESH_MS = 60 * 1000;
+
+      const fmtRupiah = (n) => {
+        return new Intl.NumberFormat("id-ID", {
+          style: "currency",
+          currency: "IDR",
+          minimumFractionDigits: 0,
+        }).format(n || 0);
+      };
+
+      const el = (id) => document.getElementById(id);
+
+      let countdownLeft = REFRESH_MS / 1000;
+      let countdownTimer = null;
+
+      function startCountdown() {
+        clearInterval(countdownTimer);
+        countdownLeft = REFRESH_MS / 1000;
+        updateCountdownUI();
+        countdownTimer = setInterval(() => {
+          countdownLeft -= 1;
+          if (countdownLeft < 0) countdownLeft = 0;
+          updateCountdownUI();
+        }, 1000);
+      }
+
+      function updateCountdownUI() {
+        el("countdown").textContent = countdownLeft;
+        el("countdown-bar").style.width =
+          (countdownLeft / (REFRESH_MS / 1000)) * 100 + "%";
+      }
+
+      function render(data) {
+        const podium = el("podium");
+        const state = el("state");
+
+        if (!data || data.length === 0) {
+          podium.innerHTML = "";
+          state.hidden = false;
+          state.textContent = "No sales data yet.";
+          return;
+        }
+        state.hidden = true;
+
+        const top3 = data.slice(0, 3);
+
+        // Podium order: rank 2 left, rank 1 center, rank 3 right
+        const ordered = [];
+        if (top3[1]) ordered.push({ t: top3[1], rank: 2 });
+        if (top3[0]) ordered.push({ t: top3[0], rank: 1 });
+        if (top3[2]) ordered.push({ t: top3[2], rank: 3 });
+
+        podium.innerHTML = ordered
+          .map((o) => buildPodium(o.t, o.rank))
+          .join("");
+
+        fitStoreNames();
+      }
+
+      function fitStoreNames() {
+        document.querySelectorAll(".podium .store-name").forEach((elm) => {
+          elm.style.fontSize = "";
+          let size = parseFloat(getComputedStyle(elm).fontSize);
+          while (elm.scrollWidth > elm.clientWidth && size > 12) {
+            size -= 1;
+            elm.style.fontSize = size + "px";
+          }
+        });
+      }
+
+      function buildPodium(t, rank) {
+        return `
+          <div class="podium-card rank-${rank}">
+            <div class="rank-badge">Rank ${rank}</div>
+            <div class="store-name">${escapeHtml(t.nama_toko)}</div>
+            <div class="revenue">${fmtRupiah(t.pendapatan)}</div>
+            <div class="meta">
+              <iconify-icon icon="mdi:receipt-text-outline"></iconify-icon>
+              ${t.jumlah_transaksi} transactions
+            </div>
+          </div>`;
+      }
+
+      function escapeHtml(s) {
+        return String(s == null ? "" : s)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      async function fetchData() {
+        try {
+          const resp = await fetch(API_URL + "?action=getLeaderboard");
+          const result = await resp.json();
+          if (result.status === "success") {
+            render(result.data || []);
+            el("updated-text").textContent =
+              "Last updated " +
+              new Date(result.updatedAt).toLocaleTimeString("en-GB");
+          } else {
+            throw new Error(result.message || "Load failed");
+          }
+        } catch (err) {
+          el("state").hidden = false;
+          el("state").textContent =
+            "Cannot connect to the server. Retrying...";
+          el("updated-text").textContent = "Connection lost";
+        } finally {
+          startCountdown();
+        }
+      }
+
+      startCountdown();
+      fetchData();
+      setInterval(fetchData, REFRESH_MS);
+      window.addEventListener("resize", fitStoreNames);
+    </script>
+  </body>
+</html>
